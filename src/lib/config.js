@@ -187,6 +187,19 @@ function envNumber(value, fallback, { min = -Infinity, max = Infinity } = {}) {
 /** Full display name, e.g. "Bolonsori Public Cemetery". */
 export const SITE_NAME = envText(process.env.NEXT_PUBLIC_SITE_NAME, "Bolonsori Public Cemetery");
 
+/**
+ * Fixed starting point for kiosk directions. The kiosk is a stationary screen
+ * on site, so every route starts where it stands rather than from browser
+ * geolocation (which desktops estimate from the network, often kilometres
+ * off). Defaults to the CMP Admin Office; override with
+ * NEXT_PUBLIC_KIOSK_START_LAT / _LNG / _LABEL.
+ */
+export const KIOSK_START_POINT = {
+  lat: envNumber(process.env.NEXT_PUBLIC_KIOSK_START_LAT, 8.4661065, { min: -90, max: 90 }),
+  lng: envNumber(process.env.NEXT_PUBLIC_KIOSK_START_LNG, 124.65747, { min: -180, max: 180 }),
+  label: envText(process.env.NEXT_PUBLIC_KIOSK_START_LABEL, "CMP Admin Office"),
+};
+
 /** Short brand word used in tight spaces, e.g. "Bolonsori". */
 export const SITE_SHORT_NAME = envText(process.env.NEXT_PUBLIC_SITE_SHORT_NAME, "Bolonsori");
 

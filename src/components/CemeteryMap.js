@@ -73,12 +73,17 @@ const BASE_OPTIONS = {
   maxZoom: 24,
 };
 
+// Room left around a fitted route: the dashboard overlays a ~360px panel on
+// the left of the map, so leave that side clear by default.
+const ROUTE_FIT_PADDING = { top: 70, right: 60, bottom: 80, left: 380 };
+
 function GoogleMapLoadedView({
   apiKey,
   plots = [],
   selectedPlot,
   onSelectPlot,
   routeCoords,
+  routeFitPadding = ROUTE_FIT_PADDING,
   placingMode = false,
   draftMarker = null,
   onMapClick,
@@ -569,15 +574,31 @@ function GoogleMapLoadedView({
     [routeCoords]
   );
 
+  // Route is [origin, ...road..., plot]: the first and last segments are the
+  // off-road walks to/from the nearest road, drawn dashed; the rest is solid.
+  const routeSegments = useMemo(() => {
+    if (routePath.length < 4) return { road: routePath, connectors: [] };
+    const last = routePath.length - 1;
+    return {
+      road: routePath.slice(1, last),
+      connectors: [
+        [routePath[0], routePath[1]],
+        [routePath[last - 1], routePath[last]],
+      ],
+    };
+  }, [routePath]);
+
   useEffect(() => {
     if (!map || !window.google?.maps || routePath.length < 2) return;
     try {
       const bounds = new window.google.maps.LatLngBounds();
       routePath.forEach((pt) => bounds.extend(pt));
-      map.fitBounds(bounds, { top: 70, right: 60, bottom: 80, left: 380 });
+      map.fitBounds(bounds, routeFitPadding);
     } catch {
       // ignore
     }
+    // routeFitPadding is a static layout hint; refit only for a new route.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [map, routePath]);
 
   const handleMapClick = useCallback(
@@ -1151,12 +1172,45 @@ function GoogleMapLoadedView({
         onClick={handleMapClick}
       >
         {/* Navigation Polyline */}
-        {routePath.length > 1 && (
+        {routeSegments.road.length > 1 && (
           <PolylineF
-            path={routePath}
-            options={{ strokeColor: "#00E5FF", strokeWeight: 5, strokeOpacity: 0.9 }}
+            path={routeSegments.road}
+            options={{ strokeColor: "#00E5FF", strokeWeight: 5, strokeOpacity: 0.9, zIndex: 300 }}
           />
         )}
+        {/* Route start: where the visitor (or the kiosk) begins walking */}
+        {routePath.length > 1 && window.google?.maps && (
+          <MarkerF
+            position={routePath[0]}
+            title="Start"
+            zIndex={320}
+            icon={{
+              path: window.google.maps.SymbolPath.CIRCLE,
+              scale: 8,
+              fillColor: "#00E5FF",
+              fillOpacity: 1,
+              strokeColor: "#ffffff",
+              strokeWeight: 3,
+            }}
+          />
+        )}
+        {routeSegments.connectors.map((segment, index) => (
+          <PolylineF
+            key={`route-connector-${index}`}
+            path={segment}
+            options={{
+              strokeOpacity: 0,
+              zIndex: 300,
+              icons: [
+                {
+                  icon: { path: "M 0,-1 0,1", strokeColor: "#00E5FF", strokeOpacity: 1, strokeWeight: 4, scale: 3 },
+                  offset: "0",
+                  repeat: "14px",
+                },
+              ],
+            }}
+          />
+        ))}
 
         {/* Cemetery Section Boundary Polygon (Blue outline — customizable length/size by lines) */}
         {boundaryPaths.length >= 3 && (
@@ -1737,7 +1791,7 @@ function GoogleMapLoadedView({
                   alignItems: "center",
                   gap: 10,
                   padding: "2px 2px",
-                  fontFamily: "system-ui, -apple-system, sans-serif",
+                  fontFamily: "var(--font-sans)",
                 }}
               >
                 <div

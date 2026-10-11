@@ -686,7 +686,7 @@ export default function PlotDetailsDrawer({
                       gap: 5,
                       fontSize: "0.78rem",
                       color: isLight ? "#6b7280" : "#94a3b8",
-                      fontFamily: "monospace",
+                      fontFamily: "var(--font-mono)",
                       fontStyle: "italic",
                       cursor: "pointer",
                       background: "transparent",

@@ -45,9 +45,11 @@
   to { opacity: 1; transform: translateX(0); }
 }
 
+/* `backwards` hides the element during its delay, then lets the animation
+   go once it ends. A `forwards` fill keeps opacity animated for good, which
+   isolates the element and stops backdrop-filter (glass) blurring the page. */
 .fade-in-up {
-  animation: fadeInUp 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-  opacity: 0;
+  animation: fadeInUp 0.8s cubic-bezier(0.16, 1, 0.3, 1) backwards;
 }
 .delay-100 { animation-delay: 100ms; }
 .delay-200 { animation-delay: 200ms; }
@@ -73,8 +75,7 @@
 .premium-nav.scrolled {
   background: rgba(11, 17, 32, 0.85);
   backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  border-bottom-color: transparent;
   box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.5);
   height: 70px;
 }
@@ -97,16 +98,6 @@
   color: #fff !important;
 }
 
-.premium-brand-icon {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 40px;
-  height: 40px;
-  border-radius: 10px;
-  background: linear-gradient(135deg, var(--primary), var(--primary-dark));
-  box-shadow: 0 4px 15px rgba(59, 130, 246, 0.4);
-}
 
 .premium-nav-links {
   display: flex;
@@ -142,6 +133,11 @@
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   display: block;
+  /* Gradient text is only painted inside the box; the tight line-height
+     would cut off descenders (g, y, p), so extend the box downward and
+     pull the layout back up so spacing is unchanged. */
+  padding-bottom: 0.14em;
+  margin-bottom: -0.14em;
 }
 
 .premium-title-sub {
@@ -172,7 +168,6 @@
   align-items: center;
   background: var(--public-card-bg);
   backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
   border: 1px solid var(--public-border);
   border-radius: 9999px;
   padding: 0.5rem;
@@ -203,6 +198,7 @@
 }
 
 .premium-search-input {
+  min-height: 44px;
   flex: 1;
   background: transparent;
   border: none;
@@ -237,96 +233,89 @@
   transform: translateY(-1px);
 }
 
-/* ── Features Section ────────────────────────────────────────────────── */
+/* ── Features Section (minimal) ──────────────────────────────────────── */
 
 .premium-features-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-  gap: 2rem;
-  padding: 2rem 5% 6rem;
-  max-width: 1200px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1.25rem;
+  width: 100%;
+  max-width: 1100px;
   margin: 0 auto;
+  padding: 1rem 1.5rem 5rem;
   position: relative;
   z-index: 10;
 }
 
+/* Flat tiles: no border, no shadow, no lift — just a faint tint. */
 .premium-feature-card {
-  background: rgba(30, 41, 59, 0.4);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border: 1px solid rgba(255, 255, 255, 0.05);
-  border-radius: 24px;
-  padding: 2.5rem;
-  transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
-  position: relative;
-  overflow: hidden;
-}
-
-.premium-feature-card::before {
-  content: '';
-  position: absolute;
-  top: 0; left: 0; right: 0; height: 1px;
-  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.1), transparent);
-  opacity: 0;
-  transition: opacity 0.4s ease;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 1.9rem 1.75rem;
+  border-radius: 16px;
+  text-align: center;
+  background: var(--public-feature-bg);
+  border: none;
+  box-shadow: none;
+  transition: background-color 0.25s ease;
 }
 
 .premium-feature-card:hover {
-  transform: translateY(-8px);
-  background: rgba(30, 41, 59, 0.6);
-  border-color: rgba(255, 255, 255, 0.1);
-  box-shadow: 0 20px 40px -10px rgba(0, 0, 0, 0.5);
+  background: var(--public-feature-hover);
 }
 
-.premium-feature-card:hover::before {
-  opacity: 1;
+/* Icon sits inline before the title; the pair is centred. */
+.premium-feature-header {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6rem;
+  margin: 0 !important;
 }
 
 .premium-feature-icon {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  background: transparent !important;
-  border: none !important;
-  border-radius: 0 !important;
-  box-shadow: none !important;
-  width: auto !important;
-  height: auto !important;
-  padding: 0 !important;
   margin: 0 !important;
   line-height: 1;
-  transition: transform 0.3s ease;
-  flex-shrink: 0;
 }
 
 .premium-feature-icon svg {
   display: block;
-  width: clamp(2rem, 3.2vw, 2.6rem);
-  height: clamp(2rem, 3.2vw, 2.6rem);
-}
-
-.premium-feature-card:hover .premium-feature-icon {
-  transform: scale(1.12) translateY(-2px);
-}
-
-.premium-feature-header {
-  display: flex;
-  align-items: center;
-  gap: 0.85rem;
-  margin-bottom: 1.25rem;
+  width: 24px;
+  height: 24px;
+  stroke-width: 1.5;
 }
 
 .premium-feature-title {
-  font-size: clamp(1.25rem, 2.2vw, 1.45rem);
-  font-weight: 700;
-  color: var(--text-primary);
   margin: 0 !important;
-  line-height: 1.25;
+  font-size: 1.1rem;
+  font-weight: 650;
+  line-height: 1.3;
+  letter-spacing: -0.01em;
+  color: var(--text-primary);
 }
 
 .premium-feature-desc {
+  margin: 0;
+  font-size: 0.95rem;
+  line-height: 1.65;
   color: var(--text-secondary);
-  line-height: 1.6;
+}
+
+@media (max-width: 900px) {
+  .premium-features-grid {
+    grid-template-columns: minmax(0, 1fr);
+    max-width: 560px;
+    gap: 0.85rem;
+    padding-bottom: 3.5rem;
+  }
+  .premium-feature-card {
+    padding: 1.4rem;
+  }
 }
 
 /* ── Footer ──────────────────────────────────────────────────────────── */
@@ -335,129 +324,1158 @@
   text-align: center;
   padding: 3rem 5%;
   color: var(--text-muted);
-  border-top: 1px solid rgba(255, 255, 255, 0.05);
+  border-top: none;
   margin-top: auto;
   position: relative;
   z-index: 10;
   font-size: 0.9rem;
 }
 
-/* ── Search Page ─────────────────────────────────────────────────────── */
+/* ── Landing photo slideshow ─────────────────────────────────────────── */
 
-.search-header-area {
-  text-align: center;
-  padding: 60px 0 40px;
+.landing-slideshow {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+  background: var(--public-page-bg);
+  opacity: 1;
+  transition: opacity 0.9s cubic-bezier(0.4, 0, 0.2, 1);
+  animation: landingSlideshowIn 0.9s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-.search-input-wrapper {
+/* Toggling off fades the photos away to reveal the plain mesh beneath. */
+.landing-slideshow.is-hidden {
+  opacity: 0;
+}
+
+@keyframes landingSlideshowIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* Surfaces ease between plain and glass while the photos crossfade. */
+.premium-search-form,
+.premium-feature-card,
+.premium-feature-title,
+.premium-feature-desc,
+.premium-subtitle,
+.premium-brand,
+.premium-nav-links .btn,
+.public-theme-toggle,
+.landing-bg-toggle {
+  transition:
+    background-color 0.45s ease,
+    color 0.45s ease,
+    box-shadow 0.45s ease,
+    text-shadow 0.45s ease,
+    transform 0.2s ease;
+}
+
+.landing-slide {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  transition: opacity 1.6s ease;
+}
+
+.landing-slide.is-active {
+  opacity: 1;
+}
+
+.landing-slide-img {
+  object-fit: cover;
+}
+
+/* Slow camera move on the visible photo, chosen at random per slide
+   (--slide-motion). The outgoing photo keeps its move while it fades out;
+   a slide waiting off screen is still, and starts its move as it fades in. */
+.landing-slide.is-active .landing-slide-img,
+.landing-slide.is-previous .landing-slide-img {
+  animation: var(--slide-motion, slideZoomIn) 9s ease-out forwards;
+}
+
+/* Pans and drifts stay zoomed in (1.12) so the photo edges never show. */
+@keyframes slideZoomIn {
+  from { transform: scale(1); }
+  to { transform: scale(1.1); }
+}
+
+@keyframes slideZoomOut {
+  from { transform: scale(1.12); }
+  to { transform: scale(1); }
+}
+
+@keyframes slidePanLeftToRight {
+  from { transform: scale(1.12) translateX(-4%); }
+  to { transform: scale(1.12) translateX(4%); }
+}
+
+@keyframes slidePanRightToLeft {
+  from { transform: scale(1.12) translateX(4%); }
+  to { transform: scale(1.12) translateX(-4%); }
+}
+
+@keyframes slidePanTopToBottom {
+  from { transform: scale(1.12) translateY(-4%); }
+  to { transform: scale(1.12) translateY(4%); }
+}
+
+@keyframes slidePanBottomToTop {
+  from { transform: scale(1.12) translateY(4%); }
+  to { transform: scale(1.12) translateY(-4%); }
+}
+
+@keyframes slideDriftDown {
+  from { transform: scale(1.12) translate(-3%, -3%); }
+  to { transform: scale(1.12) translate(3%, 3%); }
+}
+
+@keyframes slideDriftUp {
+  from { transform: scale(1.12) translate(3%, 3%); }
+  to { transform: scale(1.12) translate(-3%, -3%); }
+}
+
+/* Theme-tinted veil so text stays readable over any photo. */
+.landing-slideshow-overlay {
+  position: absolute;
+  inset: 0;
+  background: var(--public-slide-veil);
+}
+
+/* ── Slideshow glass surfaces (clear glass) ──
+   Search bar and feature tiles share one material: nearly clear glass — the
+   photo stays visible through it with only a light blur and a thin tint —
+   outlined by a soft grey gradient rim and a faint top highlight. */
+.is-slideshow .premium-search-form,
+.is-slideshow .premium-feature-card {
   position: relative;
-  max-width: 700px;
-  margin: 0 auto 3rem;
-  display: flex;
-  gap: 1rem;
+  isolation: isolate;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.13) 0%, rgba(255, 255, 255, 0.04) 100%);
+  backdrop-filter: blur(1.5px) saturate(140%);
+  border: none;
+  box-shadow:
+    inset 0 1px 1px rgba(203, 213, 225, 0.18),
+    0 24px 48px -20px rgba(0, 0, 0, 0.55),
+    0 2px 8px -2px rgba(0, 0, 0, 0.25);
 }
 
-.search-input-wrapper .form-input {
-  flex: 1;
-  height: 52px;
-  padding: 0 1.5rem 0 3.5rem;
-  font-size: 1.05rem;
-  border-radius: 8px;
+.is-slideshow .premium-feature-card {
+  border-radius: 26px;
+}
+
+/* Grey gradient rim: a 1px ring masked out of a soft grey gradient. */
+.is-slideshow .premium-search-form::before,
+.is-slideshow .premium-feature-card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  padding: 1px;
+  border-radius: inherit;
+  background: linear-gradient(
+    135deg,
+    rgba(203, 213, 225, 0.38) 0%,
+    rgba(148, 163, 184, 0.16) 35%,
+    rgba(148, 163, 184, 0.08) 65%,
+    rgba(203, 213, 225, 0.24) 100%
+  );
+  mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
+  pointer-events: none;
+}
+
+.is-slideshow .premium-feature-card:hover,
+.is-slideshow .premium-search-form:focus-within {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.18) 0%, rgba(255, 255, 255, 0.07) 100%);
+}
+
+.is-slideshow .premium-search-form:focus-within {
+  box-shadow:
+    inset 0 1px 1px rgba(203, 213, 225, 0.22),
+    0 0 0 3px rgba(148, 163, 184, 0.18),
+    0 24px 52px -18px rgba(0, 0, 0, 0.6);
+}
+
+/* Scrolled header: the same clear glass, with a little more blur so the
+   hero title passing underneath doesn't fight the header text. No divider
+   line — a faint grey glow along the bottom edge gives it shape. */
+.is-slideshow .premium-nav.scrolled {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.1) 0%, rgba(255, 255, 255, 0.04) 100%);
+  backdrop-filter: blur(14px) saturate(150%);
+  border-bottom-color: transparent;
+  box-shadow:
+    inset 0 -1px 0 rgba(203, 213, 225, 0.1),
+    0 10px 30px -14px rgba(0, 0, 0, 0.5);
+}
+
+.is-slideshow .premium-brand,
+.is-slideshow .premium-nav-links .btn,
+.is-slideshow .public-theme-toggle {
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
+}
+
+/* Locate: translucent blue glass pill with its own top highlight. */
+.is-slideshow .premium-search-form .btn {
+  background: linear-gradient(180deg, rgba(96, 165, 250, 0.82) 0%, rgba(37, 99, 235, 0.72) 100%) !important;
+  backdrop-filter: blur(8px) saturate(160%);
+  box-shadow:
+    inset 0 1px 1px rgba(255, 255, 255, 0.45),
+    inset 0 -1px 1px rgba(0, 0, 0, 0.12),
+    0 6px 18px -6px rgba(37, 99, 235, 0.6);
+}
+
+.is-slideshow .premium-search-form .btn:hover {
+  background: linear-gradient(180deg, rgba(96, 165, 250, 0.92) 0%, rgba(37, 99, 235, 0.85) 100%) !important;
+}
+
+/* Clear glass shows the photo, so text carries its own soft shadow. */
+.is-slideshow .premium-search-input {
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
+}
+
+.is-slideshow .premium-feature-title,
+.is-slideshow .premium-feature-desc {
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.7), 0 0 12px rgba(0, 0, 0, 0.35);
+}
+
+.is-slideshow .premium-search-input {
+  color: #ffffff !important;
+}
+
+.is-slideshow .premium-search-input::placeholder {
+  color: rgba(255, 255, 255, 0.72);
+  opacity: 1;
+}
+
+.is-slideshow .premium-search-icon,
+.is-slideshow .premium-search-form:focus-within .premium-search-icon {
+  color: rgba(255, 255, 255, 0.85);
+}
+
+/* Autofill would paint an opaque box over the glass; keep it clear. */
+.is-slideshow .premium-search-input:-webkit-autofill,
+.is-slideshow .premium-search-input:-webkit-autofill:hover,
+.is-slideshow .premium-search-input:-webkit-autofill:focus {
+  -webkit-text-fill-color: #ffffff;
+  caret-color: #ffffff;
+}
+
+/* Brighter accent icons read better on glass, whatever the theme. */
+.is-slideshow .premium-feature-card:nth-child(1) .premium-feature-icon { color: #60a5fa; }
+.is-slideshow .premium-feature-card:nth-child(2) .premium-feature-icon { color: #34d399; }
+.is-slideshow .premium-feature-card:nth-child(3) .premium-feature-icon { color: #fbbf24; }
+
+.is-slideshow .premium-feature-desc {
+  color: rgba(255, 255, 255, 0.9);
+}
+
+/* Landing page: hide the browser scrollbar; scrolling still works. */
+html.landing-no-scrollbar,
+html.landing-no-scrollbar body {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+html.landing-no-scrollbar::-webkit-scrollbar,
+html.landing-no-scrollbar body::-webkit-scrollbar {
+  display: none;
+}
+
+/* Floating icon-only background switch: no circle, just the glyph. */
+.landing-bg-toggle {
+  position: fixed;
+  right: 1.25rem;
+  bottom: 1.25rem;
+  z-index: 60;
+  width: 44px;
+  height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: none;
+  border-radius: 10px;
+  color: var(--text-secondary);
+  background: transparent;
+  box-shadow: none;
+  cursor: pointer;
+  transition: color 0.2s ease, transform 0.2s ease;
+}
+
+.landing-bg-toggle svg {
+  width: 22px;
+  height: 22px;
+}
+
+/* A soft shadow keeps the bare icon visible over bright photos. */
+.is-slideshow .landing-bg-toggle {
+  color: #f8fafc;
+  filter: drop-shadow(0 1px 3px rgba(0, 0, 0, 0.6));
+}
+
+.landing-bg-toggle:hover {
+  color: var(--text-primary);
+  transform: translateY(-2px);
+}
+
+.landing-bg-toggle:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+@media (max-width: 640px) {
+  .landing-bg-toggle {
+    right: 1rem;
+    bottom: 1rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .landing-slideshow {
+    transition-duration: 0.01ms;
+    animation: none;
+  }
+  .landing-slide {
+    transition-duration: 0.01ms;
+  }
+  .landing-slide.is-active .landing-slide-img,
+  .landing-slide.is-previous .landing-slide-img {
+    animation: none;
+  }
+}
+
+/* ── Modern Search Page Redesign ─────────────────────────────────────── */
+
+.search-page-container {
+  max-width: 1200px;
+  margin: 0 auto;
+  width: 100%;
+  padding: 0 1.5rem 5rem;
+  position: relative;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Header Area */
+.search-hero {
+  text-align: center;
+  padding: 105px 1rem 28px;
+  max-width: 820px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+
+.search-title {
+  font-size: clamp(2rem, 5vw, 3.25rem);
+  font-weight: 800;
+  line-height: 1.15;
+  letter-spacing: -0.03em;
+  margin: 0 0 1rem;
+  color: var(--text-primary);
+}
+
+.search-subtitle {
+  font-size: clamp(0.95rem, 2vw, 1.15rem);
+  color: var(--text-muted);
+  line-height: 1.6;
+  margin: 0 auto 2rem;
+  max-width: 600px;
+}
+
+/* Redesigned Search Form */
+.search-form-shell {
+  max-width: 740px;
+  margin: 0 auto 1.5rem;
+  width: 100%;
+}
+
+.search-input-group {
+  display: flex;
+  align-items: center;
   background: var(--public-card-bg);
   backdrop-filter: blur(16px);
   border: 1px solid var(--public-border);
-  color: var(--text-primary) !important;
-  transition: all 0.3s ease;
+  border-radius: 16px;
   box-shadow: var(--public-shadow);
-  box-sizing: border-box;
+  padding: 6px;
+  gap: 0.5rem;
+  transition: all 0.25s ease;
+  position: relative;
 }
 
-.search-input-wrapper .form-input:focus {
+.search-input-group:focus-within {
   border-color: var(--primary);
   box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.15), var(--public-shadow);
   background: var(--public-input-focus, var(--public-card-bg));
 }
 
-.search-input-wrapper .search-icon {
+.search-input-field-wrapper {
+  position: relative;
+  flex: 1;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.search-field-icon {
   position: absolute;
-  left: 1.25rem;
+  left: 1rem;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-muted);
+  pointer-events: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.search-main-input {
+  width: 100%;
+  height: 48px;
+  padding: 0 2.75rem 0 3rem;
+  font-size: 1.05rem;
+  color: var(--text-primary);
+  background: transparent;
+  border: none;
+  outline: none;
+  box-sizing: border-box;
+}
+
+/* If a browser still autofills a search box, keep the app's colors instead
+   of the browser's light-blue autofill fill. */
+.search-main-input:-webkit-autofill,
+.search-main-input:-webkit-autofill:hover,
+.search-main-input:-webkit-autofill:focus,
+.premium-search-input:-webkit-autofill,
+.premium-search-input:-webkit-autofill:hover,
+.premium-search-input:-webkit-autofill:focus {
+  -webkit-text-fill-color: var(--text-primary);
+  caret-color: var(--text-primary);
+  transition: background-color 600000s 0s, color 600000s 0s;
+}
+
+.search-main-input::placeholder {
+  color: var(--text-muted);
+  opacity: 0.75;
+}
+
+.search-clear-btn {
+  position: absolute;
+  right: 0.5rem;
+  top: 50%;
+  transform: translateY(-50%);
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
+  min-height: 44px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  padding: 0;
+}
+
+.search-clear-btn:hover {
+  background: rgba(148, 163, 184, 0.3);
+  color: var(--text-primary);
+}
+
+.search-submit-btn {
+  height: 48px;
+  padding: 0 1.6rem;
+  border-radius: 12px;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  flex-shrink: 0;
+  min-width: 44px;
+  min-height: 44px;
+  cursor: pointer;
+}
+
+/* Quick Suggestion Chips */
+.search-quick-tags {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin: 0 auto;
+}
+
+.search-tag-label {
+  font-size: 0.82rem;
+  font-weight: 500;
+  color: var(--text-muted);
+  margin-right: 0.25rem;
+}
+
+.search-tag-chip {
+  min-height: 44px;
+  padding: 0 1rem;
+  border-radius: 9999px;
+  font-size: 0.82rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+  background: var(--public-card-bg);
+  border: 1px solid var(--public-border-soft);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  transition: all 0.2s ease;
+}
+
+.search-tag-chip:hover {
+  color: var(--text-primary);
+  background: var(--bg-hover);
+  border-color: var(--border-hover);
+  transform: translateY(-1px);
+}
+
+.search-tag-chip.active {
+  color: #fff;
+  background: var(--primary);
+  border-color: var(--primary);
+}
+
+/* Results Toolbar */
+.search-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 1rem;
+  padding: 0.5rem 0 1rem;
+  margin-bottom: 1rem;
+}
+
+.search-toolbar-left {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.search-count-badge {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.search-match-chip {
+  padding: 0.3rem 0.7rem;
+  border-radius: 8px;
+  font-size: 0.74rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  background: rgba(59, 130, 246, 0.12);
+  color: var(--primary-light, #60a5fa);
+  border: 1px solid rgba(59, 130, 246, 0.25);
+}
+
+.search-toolbar-right {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+/* Toolbar controls — filter tabs, sort select and view toggle share one
+   height, radius, border, type size and active state. */
+.search-filter-pills,
+.search-view-toggle,
+.search-sort-select {
+  --ctl-pad: 3px;
+  --ctl-inner: 42px;
+  box-sizing: border-box;
+  height: calc(var(--ctl-inner) + var(--ctl-pad) * 2 + 2px);
+  background: var(--public-card-bg);
+  border: 1px solid var(--public-border-soft);
+  border-radius: 12px;
+}
+
+.search-filter-pills,
+.search-view-toggle {
+  display: inline-flex;
+  align-items: stretch;
+  padding: var(--ctl-pad);
+  gap: 2px;
+}
+
+.search-filter-pill,
+.search-view-btn {
+  min-height: var(--ctl-inner);
+  border: none;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.search-filter-pill {
+  gap: 0.5rem;
+  padding: 0 1rem;
+}
+
+.search-view-btn {
+  width: 44px;
+  min-width: 44px;
+  padding: 0;
+}
+
+.search-filter-pill:hover,
+.search-view-btn:hover {
+  color: var(--text-primary);
+  background: var(--bg-hover);
+}
+
+.search-filter-pill.active,
+.search-view-btn.active {
+  background: var(--primary);
+  color: #fff;
+  font-weight: 600;
+}
+
+.search-filter-count {
+  min-width: 1.4rem;
+  padding: 0.05rem 0.4rem;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1.4;
+  text-align: center;
+  background: var(--bg-hover);
+  color: var(--text-muted);
+}
+
+.search-filter-pill.active .search-filter-count {
+  background: rgba(255, 255, 255, 0.22);
+  color: #fff;
+}
+
+/* Sort selector */
+.search-sort-wrap {
+  position: relative;
+  display: inline-flex;
+}
+
+.search-sort-select {
+  appearance: none;
+  -webkit-appearance: none;
+  min-width: 190px;
+  padding: 0 2.5rem 0 1rem;
+  color: var(--text-primary);
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  outline: none;
+  transition: border-color 0.15s ease;
+}
+
+.search-sort-select:hover {
+  border-color: var(--border-hover);
+}
+
+.search-sort-select:focus-visible {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
+}
+
+.search-sort-chevron {
+  position: absolute;
+  right: 0.9rem;
   top: 50%;
   transform: translateY(-50%);
   color: var(--text-muted);
   pointer-events: none;
 }
 
-.search-input-wrapper .btn {
-  height: 52px;
-  border-radius: 8px;
-  padding: 0 2rem;
-  font-size: 1.05rem;
-  box-sizing: border-box;
+/* Grid & List Layouts */
+.search-grid-layout {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(330px, 1fr));
+  gap: 1.25rem;
 }
 
-.search-result-premium {
-  display: flex;
-  align-items: flex-start;
-  gap: 1.5rem;
-  padding: 1.5rem;
-  background: rgba(30, 41, 59, 0.4);
-  backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.05);
+.search-list-layout {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.85rem;
+}
+
+/* Card Modern Styling with Responsive Landscape Photo */
+.grave-card-modern {
+  background: var(--public-card-bg);
+  backdrop-filter: blur(14px);
+  border: 1px solid var(--public-border);
   border-radius: 20px;
-  transition: all 0.3s ease;
-  cursor: pointer;
-}
-
-.search-result-premium:hover {
-  background: rgba(30, 41, 59, 0.7);
-  border-color: rgba(255, 255, 255, 0.15);
-  transform: translateY(-2px);
-  box-shadow: 0 10px 20px -5px rgba(0, 0, 0, 0.3);
-}
-
-.search-result-icon-premium {
-  width: 48px;
-  height: 48px;
-  border-radius: 12px;
-  background: rgba(59, 130, 246, 0.1);
-  color: var(--primary-light);
+  overflow: hidden;
+  transition: transform 0.25s ease, border-color 0.25s ease, box-shadow 0.25s ease;
   display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  border: 1px solid rgba(59, 130, 246, 0.2);
+  flex-direction: column;
+  position: relative;
 }
 
-.search-result-content {
+.grave-card-modern:hover {
+  background: var(--public-card-hover);
+  border-color: var(--border-hover);
+  transform: translateY(-3px);
+  box-shadow: 0 14px 34px -10px rgba(0, 0, 0, 0.4);
+}
+
+/* Landscape Photo Header */
+.grave-card-media {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  background: rgba(148, 163, 184, 0.08);
+  overflow: hidden;
+}
+
+.grave-card-photo {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  transition: transform 0.35s ease;
+}
+
+.grave-card-modern:hover .grave-card-photo {
+  transform: scale(1.05);
+}
+
+.grave-card-body {
+  padding: 1.25rem;
+  display: flex;
+  flex-direction: column;
   flex: 1;
 }
 
-.search-result-title {
+.grave-card-name {
   font-size: 1.25rem;
   font-weight: 700;
-  color: #fff;
-  margin-bottom: 0.5rem;
+  line-height: 1.3;
+  color: var(--text-primary);
+  margin: 0 0 0.5rem;
+  word-break: break-word;
 }
 
-.search-result-details {
+.grave-card-meta-list {
   display: flex;
-  flex-wrap: wrap;
-  gap: 1rem;
-  color: var(--text-secondary);
-  font-size: 0.9rem;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-bottom: 1.25rem;
+  flex: 1;
 }
 
-.search-result-detail-item {
+.grave-card-location {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+  line-height: 1.4;
+  margin: 0;
+}
+
+.grave-card-location svg {
+  color: var(--primary-light, #60a5fa);
+  flex-shrink: 0;
+}
+
+.grave-card-plot-meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin: 0;
+}
+
+.grave-plot-pill {
+  font-size: 0.78rem;
+  font-weight: 600;
+  padding: 0.2rem 0.6rem;
+  border-radius: 6px;
+  background: rgba(59, 130, 246, 0.1);
+  color: var(--primary-light, #60a5fa);
+  border: 1px solid rgba(59, 130, 246, 0.2);
+}
+
+.grave-card-date {
   display: flex;
   align-items: center;
   gap: 0.4rem;
+  font-size: 0.84rem;
+  color: var(--text-muted);
+  margin: 0;
 }
 
-.search-result-badge-area {
+.grave-card-date svg {
+  flex-shrink: 0;
+  opacity: 0.8;
+}
+
+.grave-card-footer {
+  margin-top: auto;
+  padding-top: 0.25rem;
+}
+
+.grave-action-btn {
+  min-height: 44px;
+  width: 100%;
+  padding: 0 1.25rem;
+  border-radius: 12px;
+  font-size: 0.92rem;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  text-decoration: none;
+}
+
+/* List View Card Styling
+   Photo on the left; on the right a fixed stack of rows (name, location,
+   plot, burial date + map route) so every card shares the same height. */
+.grave-card-list {
+  background: var(--public-card-bg);
+  backdrop-filter: blur(14px);
+  border: 1px solid var(--public-border);
+  border-radius: 16px;
+  padding: 1rem 1.25rem;
+  display: flex;
+  align-items: stretch;
+  gap: 1.15rem;
+  min-width: 0;
+  transition: all 0.2s ease;
+}
+
+.grave-card-list:hover {
+  background: var(--public-card-hover);
+  border-color: var(--border-hover);
+  transform: translateY(-1px);
+}
+
+/* The photo spans the full height of the text beside it (name to date). */
+.grave-card-list-media {
+  position: relative;
+  flex-shrink: 0;
+  width: 104px;
+  min-height: 64px;
+}
+
+.grave-card-list-photo {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border-radius: 10px;
+  object-fit: cover;
+  border: 1px solid var(--public-border-soft);
+}
+
+/* Name row: name on the left, status pinned to the right edge. */
+.grave-list-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  min-width: 0;
+  margin-bottom: 0.1rem;
+}
+
+.grave-list-status {
+  flex-shrink: 0;
+  padding: 0.1rem 0.55rem;
+  border-radius: 9999px;
+  font-size: 0.68rem;
+  line-height: 1.4;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  background: rgba(148, 163, 184, 0.15);
+  border: 1px solid rgba(148, 163, 184, 0.25);
+}
+
+.grave-card-list-details {
+  flex: 1;
+  min-width: 0;
   display: flex;
   flex-direction: column;
-  align-items: flex-end;
-  gap: 0.5rem;
+  gap: 0.3rem;
+}
+
+.grave-list-name {
+  margin: 0;
+  min-width: 0;
+  font-size: 1.05rem;
+  font-weight: 700;
+  line-height: 1.3;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* One fact per row, truncated rather than wrapped. */
+.grave-list-row {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-width: 0;
+  margin: 0;
+  font-size: 0.82rem;
+  line-height: 1.4;
+  color: var(--text-muted);
+}
+
+.grave-list-row > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.grave-list-row svg {
+  flex-shrink: 0;
+}
+
+.grave-list-location svg {
+  color: var(--primary-light, #60a5fa);
+}
+
+/* Burial date and the map route button share the bottom row. */
+.grave-list-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  min-width: 0;
+  margin-top: auto;
+}
+
+.grave-list-date {
+  flex: 1;
+}
+
+/* Compact secondary action in list rows (overrides the 44px .btn height). */
+.grave-list-footer .grave-action-btn {
+  flex-shrink: 0;
+  width: auto;
+  min-width: 0;
+  height: 34px;
+  min-height: 34px;
+  padding: 0 0.7rem;
+  gap: 0.35rem;
+  border-radius: 8px;
+  font-size: 0.8rem;
+  white-space: nowrap;
+}
+
+.grave-list-footer .grave-action-btn svg {
+  width: 13px;
+  height: 13px;
+}
+
+/* Skeleton Loading State */
+.skeleton-card {
+  background: var(--public-card-bg);
+  border: 1px solid var(--public-border-soft);
+  border-radius: 20px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.skeleton-media {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+}
+
+.skeleton-body {
+  padding: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.skeleton-shimmer {
+  background: linear-gradient(
+    90deg,
+    rgba(148, 163, 184, 0.08) 0%,
+    rgba(148, 163, 184, 0.2) 50%,
+    rgba(148, 163, 184, 0.08) 100%
+  );
+  background-size: 200% 100%;
+  animation: skeletonPulse 1.6s ease-in-out infinite;
+  border-radius: 8px;
+}
+
+@keyframes skeletonPulse {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* Empty State Modern */
+.search-empty-card {
+  text-align: center;
+  background: var(--public-card-bg);
+  backdrop-filter: blur(16px);
+  border: 1px solid var(--public-border);
+  border-radius: 24px;
+  padding: 3.5rem 1.5rem;
+  max-width: 620px;
+  margin: 1.5rem auto;
+  box-shadow: var(--public-shadow);
+}
+
+.search-empty-icon-wrap {
+  width: 72px;
+  height: 72px;
+  border-radius: 20px;
+  background: rgba(59, 130, 246, 0.1);
+  border: 1px solid rgba(59, 130, 246, 0.2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 1.5rem;
+  color: var(--primary-light, #60a5fa);
+}
+
+.search-empty-title {
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0 0 0.5rem;
+}
+
+.search-empty-desc {
+  font-size: 0.95rem;
+  color: var(--text-muted);
+  max-width: 440px;
+  margin: 0 auto 1.75rem;
+  line-height: 1.6;
+}
+
+.search-empty-actions {
+  display: flex;
+  justify-content: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+/* Responsiveness */
+@media (max-width: 768px) {
+  .search-hero {
+    padding: 85px 0.75rem 20px;
+  }
+  .search-toolbar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.85rem;
+  }
+  .search-toolbar-right {
+    justify-content: space-between;
+    width: 100%;
+  }
+  .search-grid-layout {
+    grid-template-columns: 1fr;
+  }
+  .search-list-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .grave-card-list {
+    padding: 0.9rem;
+    gap: 0.9rem;
+  }
+  .grave-card-list-media {
+    width: 88px;
+  }
+  .grave-list-footer .grave-action-btn {
+    height: 38px;
+    min-height: 38px;
+  }
+}
+
+@media (max-width: 480px) {
+  .grave-list-footer {
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+  .grave-list-date {
+    flex-basis: 100%;
+  }
+  .grave-list-footer .grave-action-btn {
+    width: 100%;
+  }
+  .search-input-group {
+    flex-direction: column;
+    align-items: stretch;
+    padding: 0.5rem;
+    gap: 0.5rem;
+  }
+  .search-main-input {
+    height: 44px;
+    padding: 0 2.25rem 0 2.5rem;
+    font-size: 0.95rem;
+  }
+  .search-submit-btn {
+    width: 100%;
+    justify-content: center;
+    height: 44px;
+  }
+  .search-toolbar-right {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .search-filter-pills {
+    width: 100%;
+    display: flex;
+  }
+  .search-filter-pill {
+    flex: 1;
+    justify-content: center;
+  }
+  .search-sort-wrap {
+    display: flex;
+    width: 100%;
+  }
+  .search-sort-select {
+    width: 100%;
+    min-width: 0;
+  }
+}
+
+@media (max-width: 320px) {
+  .search-page-container {
+    padding: 0 0.5rem 3rem;
+  }
+  .grave-card-top {
+    flex-direction: column;
+  }
+  .grave-card-photo {
+    width: 100%;
+    height: 120px;
+  }
 }
 
 /* ── Login Page ──────────────────────────────────────────────────────── */
@@ -518,7 +1536,6 @@
   max-width: 440px;
   background: rgba(30, 41, 59, 0.4);
   backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 24px;
   padding: 3rem;
@@ -620,6 +1637,8 @@
   --public-sidebar-bg: linear-gradient(135deg, rgba(15, 23, 42, 0.94), #0b1120);
   --public-shadow: 0 20px 40px -12px rgba(0, 0, 0, 0.45);
   --public-mesh: radial-gradient(at 40% 20%, rgba(59, 130, 246, 0.15) 0, transparent 50%), radial-gradient(at 80% 0%, rgba(16, 185, 129, 0.1) 0, transparent 50%), radial-gradient(at 0% 50%, rgba(59, 130, 246, 0.1) 0, transparent 50%);
+  --public-feature-bg: rgba(255, 255, 255, 0.03);
+  --public-feature-hover: rgba(255, 255, 255, 0.055);
 }
 
 [data-theme="light"] .public-page-wrapper,
@@ -637,6 +1656,36 @@
   --public-sidebar-bg: linear-gradient(135deg, #eaf2ff, #f8fafc);
   --public-shadow: 0 20px 40px -16px rgba(15, 23, 42, 0.16);
   --public-mesh: radial-gradient(at 40% 20%, rgba(59, 130, 246, 0.14) 0, transparent 48%), radial-gradient(at 80% 0%, rgba(16, 185, 129, 0.09) 0, transparent 48%), radial-gradient(at 0% 50%, rgba(99, 102, 241, 0.08) 0, transparent 48%);
+  --public-feature-bg: rgba(15, 23, 42, 0.035);
+  --public-feature-hover: rgba(15, 23, 42, 0.06);
+}
+
+/* Photo slideshow: always a dark scrim with light text, in either theme.
+   A white wash flattens the photos and hides night shots entirely. */
+.public-page-wrapper.is-slideshow,
+[data-theme="light"] .public-page-wrapper.is-slideshow {
+  --text-primary: #f8fafc;
+  --text-secondary: #e2e8f0;
+  --text-muted: #cbd5e1;
+  --bg-hover: rgba(255, 255, 255, 0.1);
+  --border-hover: rgba(255, 255, 255, 0.22);
+  --public-shell-bg: rgba(11, 17, 32, 0.7);
+  --public-card-bg: rgba(15, 23, 42, 0.6);
+  --public-card-hover: rgba(15, 23, 42, 0.78);
+  --public-input-bg: rgba(15, 23, 42, 0.6);
+  --public-input-focus: rgba(15, 23, 42, 0.82);
+  --public-border: rgba(255, 255, 255, 0.14);
+  --public-border-soft: rgba(255, 255, 255, 0.08);
+  --public-title-start: #ffffff;
+  --public-title-end: #a5b4fc;
+  --public-shadow: 0 20px 40px -12px rgba(0, 0, 0, 0.5);
+  --public-slide-veil: linear-gradient(180deg, rgba(8, 12, 24, 0.66) 0%, rgba(8, 12, 24, 0.42) 45%, rgba(8, 12, 24, 0.84) 100%);
+  color-scheme: dark;
+}
+
+/* Keeps the subtitle legible over bright patches of a photo. */
+.is-slideshow .premium-subtitle {
+  text-shadow: 0 1px 14px rgba(0, 0, 0, 0.55);
 }
 
 .public-page-wrapper,
@@ -649,7 +1698,7 @@
 .premium-bg-mesh { background-image: var(--public-mesh); }
 .premium-nav.scrolled {
   background: var(--public-shell-bg);
-  border-bottom-color: var(--public-border-soft);
+  border-bottom-color: transparent;
   box-shadow: var(--public-shadow);
 }
 .premium-brand,
@@ -662,8 +1711,7 @@
 .premium-search-form,
 .search-input-wrapper .form-input,
 .auth-card-premium,
-.search-result-premium,
-.premium-feature-card {
+.search-result-premium {
   background: var(--public-card-bg);
   border-color: var(--public-border);
   box-shadow: var(--public-shadow);
@@ -677,13 +1725,11 @@
 .empty-state-title {
   color: var(--text-primary) !important;
 }
-.premium-feature-card:hover,
 .search-result-premium:hover {
   background: var(--public-card-hover);
   border-color: var(--border-hover);
   box-shadow: var(--public-shadow);
 }
-.premium-footer { border-top-color: var(--public-border-soft); }
 .search-input-wrapper .form-input:focus,
 .auth-card-premium .form-input:focus {
   background: var(--public-input-focus);
@@ -727,6 +1773,15 @@
   border-color: var(--border-hover);
   transform: translateY(-1px);
 }
+/* Borderless header actions (Map Navigator / Directory, theme, login, reset).
+   The border stays transparent so sizes don't shift; hover keeps the tint. */
+.premium-nav-links .btn,
+.premium-nav-links .btn:hover,
+.public-theme-toggle,
+.public-theme-toggle:hover {
+  border-color: transparent !important;
+}
+
 .public-theme-toggle:focus-visible {
   outline: 2px solid var(--primary);
   outline-offset: 2px;
@@ -752,9 +1807,9 @@
     font-size: 0.75rem;
   }
   .public-theme-toggle {
-    width: 40px;
-    height: 40px;
-    flex-basis: 40px;
+    width: 44px;
+    height: 44px;
+    flex-basis: 44px;
   }
   .auth-theme-toggle {
     top: 1rem;
@@ -773,6 +1828,7 @@
     background: var(--public-card-bg);
   }
   .premium-search-input {
+    min-height: 44px;
     width: 100%;
     padding: 0.75rem 1rem 0.75rem 2.85rem;
     font-size: 0.95rem;
@@ -788,5 +1844,835 @@
     border-radius: 14px;
     padding: 0.75rem;
     margin-top: 0;
+  }
+}
+
+/* ── Kiosk Modern Navigation Page ────────────────────────────────────── */
+
+.kiosk-public-wrapper {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.kiosk-page-container {
+  max-width: 1440px;
+  margin: 0 auto;
+  width: 100%;
+  padding: 0 1.5rem 3rem;
+  position: relative;
+  z-index: 10;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.kiosk-header {
+  text-align: center;
+  margin-bottom: 2rem;
+  padding: 105px 0 1rem;
+}
+
+@media (max-width: 640px) {
+  .kiosk-header {
+    padding: 95px 0 1rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .kiosk-nav-label {
+    display: none;
+  }
+}
+
+
+.kiosk-title {
+  font-size: clamp(1.8rem, 4vw, 2.75rem);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+  color: var(--text-primary);
+  margin: 0 0 0.5rem;
+}
+
+.kiosk-subtitle {
+  font-size: 1rem;
+  color: var(--text-secondary);
+  max-width: 620px;
+  margin: 0 auto 1.5rem;
+  line-height: 1.5;
+}
+
+.kiosk-search-form {
+  max-width: 640px;
+  margin: 0 auto;
+}
+
+/* Kiosk Workspace Grid */
+.kiosk-workspace {
+  display: grid;
+  grid-template-columns: 420px 1fr;
+  gap: 1.5rem;
+  align-items: start;
+  flex: 1;
+}
+
+@media (max-width: 1080px) {
+  .kiosk-workspace {
+    grid-template-columns: 360px 1fr;
+    gap: 1.25rem;
+  }
+}
+
+@media (max-width: 900px) {
+  .kiosk-workspace {
+    grid-template-columns: 1fr;
+    gap: 1.25rem;
+  }
+}
+
+/* Sidebar Panel */
+.kiosk-sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+/* Selected Memorial Card */
+.kiosk-selected-card {
+  background: var(--public-card-bg);
+  backdrop-filter: blur(14px);
+  border: 1px solid var(--public-border);
+  border-radius: 20px;
+  overflow: hidden;
+  box-shadow: 0 12px 30px -10px rgba(0, 0, 0, 0.25);
+  display: flex;
+  flex-direction: column;
+}
+
+.kiosk-card-media {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  background: rgba(148, 163, 184, 0.08);
+  overflow: hidden;
+}
+
+.kiosk-card-photo {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  transition: transform 0.3s ease;
+}
+
+.kiosk-card-media-overlay {
+  position: absolute;
+  bottom: 0.75rem;
+  left: 0.75rem;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  z-index: 2;
+}
+
+.kiosk-plot-pill {
+  font-size: 0.78rem;
+  font-weight: 600;
+  padding: 0.25rem 0.65rem;
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.85);
+  backdrop-filter: blur(8px);
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.kiosk-tier-pill {
+  font-size: 0.78rem;
+  font-weight: 600;
+  padding: 0.25rem 0.6rem;
+  border-radius: 8px;
+  background: rgba(59, 130, 246, 0.85);
+  backdrop-filter: blur(8px);
+  color: #fff;
+}
+
+.kiosk-card-body {
+  padding: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.kiosk-card-name {
+  font-size: 1.35rem;
+  font-weight: 700;
+  line-height: 1.25;
+  color: var(--text-primary);
+  margin: 0;
+  word-break: break-word;
+}
+
+/* Details under the name: one fact per row, identical size and colour,
+   icons in a single column so the text edges line up. */
+.kiosk-card-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.kiosk-card-meta-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.55rem;
+  margin: 0;
+  font-size: 0.88rem;
+  line-height: 1.4;
+  color: var(--text-secondary);
+}
+
+.kiosk-card-meta-item svg {
+  flex-shrink: 0;
+  width: 15px;
+  height: 15px;
+  margin-top: 0.1rem;
+  color: var(--text-muted);
+}
+
+.kiosk-card-meta-item > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.kiosk-card-location svg {
+  color: var(--primary-light, #60a5fa);
+}
+
+.kiosk-navigation-panel {
+  margin-top: 0.5rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--public-border-soft);
+}
+
+.kiosk-navigation-panel button.btn {
+  min-height: 44px;
+}
+
+/* Other Matching Results */
+.kiosk-other-results {
+  padding: 1rem 1.25rem;
+  border-top: 1px solid var(--public-border-soft);
+  background: rgba(148, 163, 184, 0.03);
+}
+
+.kiosk-other-results-title {
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  margin: 0 0 0.75rem;
+}
+
+.kiosk-other-results-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.kiosk-other-result-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.65rem 0.85rem;
+  border-radius: 12px;
+  background: var(--public-card-bg);
+  border: 1px solid var(--public-border-soft);
+  cursor: pointer;
+  text-align: left;
+  transition: all 0.2s ease;
+  min-height: 44px;
+  gap: 0.5rem;
+}
+
+.kiosk-other-result-item:hover {
+  background: var(--bg-hover);
+  border-color: var(--border-hover);
+  transform: translateX(2px);
+}
+
+.kiosk-other-result-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.kiosk-other-result-name {
+  font-size: 0.92rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.kiosk-other-result-meta {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+
+/* Results Panel (When no single grave selected) */
+.kiosk-results-panel {
+  background: var(--public-card-bg);
+  backdrop-filter: blur(14px);
+  border: 1px solid var(--public-border);
+  border-radius: 20px;
+  padding: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.kiosk-results-header {
+  border-bottom: 1px solid var(--public-border-soft);
+  padding-bottom: 0.75rem;
+}
+
+.kiosk-results-title {
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0 0 0.25rem;
+}
+
+.kiosk-results-subtitle {
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  margin: 0;
+}
+
+.kiosk-results-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  max-height: 480px;
+  overflow-y: auto;
+}
+
+.kiosk-result-card {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  padding: 0.85rem 1rem;
+  border-radius: 14px;
+  background: var(--bg-hover);
+  border: 1px solid var(--public-border-soft);
+  cursor: pointer;
+  text-align: left;
+  transition: all 0.2s ease;
+  min-height: 48px;
+}
+
+.kiosk-result-card:hover {
+  border-color: var(--primary);
+  background: var(--public-card-hover);
+  transform: translateY(-1px);
+}
+
+.kiosk-result-icon {
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  color: var(--primary-light, #60a5fa);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.kiosk-result-details {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.kiosk-result-name {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.kiosk-result-meta {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.kiosk-result-arrow {
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+/* Empty Sidebar */
+.kiosk-empty-sidebar {
+  background: var(--public-card-bg);
+  backdrop-filter: blur(14px);
+  border: 1px solid var(--public-border);
+  border-radius: 20px;
+  padding: 2.5rem 1.5rem;
+  text-align: center;
+}
+
+.kiosk-empty-icon {
+  width: 60px;
+  height: 60px;
+  border-radius: 18px;
+  background: rgba(59, 130, 246, 0.1);
+  color: var(--primary-light, #60a5fa);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 1.25rem;
+}
+
+.kiosk-empty-title {
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0 0 0.5rem;
+}
+
+.kiosk-empty-desc {
+  font-size: 0.88rem;
+  color: var(--text-secondary);
+  line-height: 1.5;
+  margin: 0;
+}
+
+/* Right Column: Dedicated Map Stage */
+.kiosk-map-stage {
+  display: flex;
+  flex-direction: column;
+}
+
+.kiosk-map-card {
+  background: var(--public-card-bg);
+  backdrop-filter: blur(14px);
+  border: 1px solid var(--public-border);
+  border-radius: 20px;
+  overflow: hidden;
+  box-shadow: 0 14px 34px -10px rgba(0, 0, 0, 0.3);
+  display: flex;
+  flex-direction: column;
+}
+
+/* Map header: no divider — one row with the back pill and live status on
+   the left and the map / plot name on the right. */
+.kiosk-map-header-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  min-height: 40px;
+  padding: 0.75rem 1rem;
+  border-bottom: none;
+  background: transparent;
+}
+
+.kiosk-map-status {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  flex-shrink: 0;
+}
+
+.kiosk-map-header-end {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  min-width: 0;
+}
+
+.kiosk-map-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  line-height: 1;
+}
+
+.kiosk-map-title {
+  min-width: 0;
+  font-size: 0.98rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--text-primary);
+  line-height: 1.25;
+  text-align: right;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Live indicator: a small green dot with a soft, slow pulse. */
+.kiosk-map-dot {
+  position: relative;
+  width: 7px;
+  height: 7px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: #22c55e;
+}
+
+.kiosk-map-dot::after {
+  content: "";
+  position: absolute;
+  inset: -3px;
+  border-radius: 50%;
+  background: rgba(34, 197, 94, 0.35);
+  animation: kioskLivePulse 2.4s ease-out infinite;
+}
+
+@keyframes kioskLivePulse {
+  0% { transform: scale(0.6); opacity: 0.9; }
+  100% { transform: scale(1.9); opacity: 0; }
+}
+
+.kiosk-map-recenter-btn {
+  min-height: 40px;
+  padding: 0 0.9rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 9999px;
+  background: var(--bg-hover);
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s ease, color 0.2s ease;
+}
+
+.kiosk-map-recenter-btn:hover {
+  background: rgba(148, 163, 184, 0.18);
+  color: var(--text-primary);
+}
+
+/* The map sits inset in the card with its own rounded corners (card radius
+   20px minus the 8px inset), so its top edge never meets the header square. */
+.kiosk-map-viewport {
+  width: auto;
+  height: clamp(500px, 62vh, 720px);
+  position: relative;
+  margin: 0 8px 8px;
+  border-radius: 12px;
+  overflow: hidden;
+  /* Clip the Google map tiles to the radius in every browser. */
+  isolation: isolate;
+  transform: translateZ(0);
+}
+
+@media (max-width: 900px) {
+  .kiosk-map-viewport {
+    height: 400px;
+  }
+}
+
+
+
+/* ── Kiosk side-by-side layout: equal column heights ─────────────────────
+   The map decides the row height; the left column takes exactly that
+   height (contain: size keeps its content from stretching the row) and
+   its card fills it, with long lists scrolling inside the card. */
+@media (min-width: 901px) {
+  .kiosk-workspace {
+    align-items: stretch;
+  }
+
+  .kiosk-sidebar {
+    contain: size;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-width: thin;
+  }
+
+  .kiosk-sidebar > * {
+    flex: 1 0 auto;
+  }
+
+  .kiosk-sidebar > .kiosk-results-panel {
+    flex: 1 1 0;
+    min-height: 0;
+  }
+
+  .kiosk-results-list {
+    flex: 1 1 0;
+    min-height: 0;
+    max-height: none;
+    padding-right: 0.25rem;
+  }
+
+  /* Selected grave: the card fits the column; the photo gives up height
+     first, then the "Other Matching Records" list scrolls inside. */
+  .kiosk-sidebar > .kiosk-selected-card {
+    flex: 1 1 0;
+    min-height: 0;
+    overflow-y: auto;
+    scrollbar-width: thin;
+  }
+
+  .kiosk-sidebar .kiosk-card-media {
+    aspect-ratio: auto;
+    flex: 1 1 0;
+    min-height: 120px;
+  }
+
+  .kiosk-sidebar .kiosk-other-results {
+    flex: 0 1 auto;
+    min-height: 96px;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .kiosk-sidebar .kiosk-other-results-list {
+    flex: 1 1 auto;
+    min-height: 0;
+  }
+
+  .kiosk-sidebar .kiosk-card-body {
+    flex: 0 0 auto;
+  }
+
+  .kiosk-sidebar > .kiosk-empty-sidebar {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+  }
+}
+
+/* ── Kiosk focus mode (/kiosk?grave=…) ──────────────────────────────────
+   One-screen layout without the search header: the map fills the space
+   left under the nav, and only the details panel scrolls internally. */
+
+/* Back: borderless pill with a soft tint; the arrow nudges on hover. */
+.kiosk-map-back-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  min-height: 40px;
+  min-width: 40px;
+  padding: 0 0.95rem 0 0.75rem;
+  flex-shrink: 0;
+  border: none;
+  border-radius: 9999px;
+  background: var(--bg-hover);
+  color: var(--text-primary);
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.kiosk-map-back-btn svg {
+  transition: transform 0.2s ease;
+}
+
+.kiosk-map-back-btn:hover {
+  background: rgba(148, 163, 184, 0.18);
+}
+
+.kiosk-map-back-btn:hover svg {
+  transform: translateX(-2px);
+}
+
+.kiosk-map-back-btn:focus-visible,
+.kiosk-map-recenter-btn:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .kiosk-map-dot::after {
+    animation: none;
+  }
+}
+
+.kiosk-focus.kiosk-public-wrapper {
+  height: 100vh;
+  height: 100dvh;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.kiosk-focus .kiosk-page-container {
+  min-height: 0;
+  padding: 88px 1.5rem 1.25rem;
+}
+
+.kiosk-focus .kiosk-workspace {
+  min-height: 0;
+  align-items: stretch;
+  grid-template-rows: minmax(0, 1fr);
+}
+
+.kiosk-focus .kiosk-sidebar {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+}
+
+/* The details column matches the map's height: the card stretches to the
+   bottom, the photo absorbs the spare height and gives it back (down to a
+   minimum) when directions or route steps need more room. */
+.kiosk-focus .kiosk-sidebar > * {
+  flex: 1 0 auto;
+}
+
+.kiosk-focus .kiosk-selected-card {
+  min-height: 100%;
+}
+
+.kiosk-focus .kiosk-card-media {
+  aspect-ratio: auto;
+  flex: 1 1 0;
+  min-height: 160px;
+}
+
+.kiosk-focus .kiosk-card-body {
+  flex: 0 0 auto;
+}
+
+.kiosk-focus .kiosk-empty-sidebar {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.kiosk-focus .kiosk-map-stage,
+.kiosk-focus .kiosk-map-card {
+  min-height: 0;
+  height: 100%;
+}
+
+.kiosk-focus .kiosk-map-viewport {
+  flex: 1;
+  height: auto;
+  min-height: 0;
+}
+
+.kiosk-focus .kiosk-map-header-bar {
+  padding: 0.6rem 1rem 0.6rem 0.6rem;
+}
+
+.kiosk-focus .alert {
+  margin-bottom: 1rem !important;
+}
+
+/* Tablets and phones: map on top, compact details panel underneath. */
+@media (max-width: 900px) {
+  .kiosk-focus .kiosk-page-container {
+    padding: 84px 0.75rem 0.75rem;
+  }
+
+  .kiosk-focus .kiosk-workspace {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    flex: 1;
+  }
+
+  .kiosk-focus .kiosk-map-stage {
+    order: -1;
+    flex: 1 1 55%;
+    height: auto;
+  }
+
+  .kiosk-focus .kiosk-sidebar {
+    flex: 0 1 auto;
+    max-height: 42%;
+  }
+
+  .kiosk-focus .kiosk-sidebar > * {
+    flex: 0 0 auto;
+  }
+
+  .kiosk-focus .kiosk-selected-card {
+    min-height: 0;
+  }
+
+  .kiosk-focus .kiosk-card-media {
+    flex: 0 0 auto;
+    height: 96px;
+    min-height: 0;
+  }
+
+  .kiosk-focus .kiosk-card-body {
+    padding: 0.85rem 1rem;
+    gap: 0.5rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .kiosk-focus .kiosk-map-back-label {
+    display: none;
+  }
+
+  .kiosk-focus .kiosk-map-back-btn {
+    padding: 0;
+    justify-content: center;
+  }
+}
+
+/* Short landscape screens (phones turned sideways): details beside the map. */
+@media (max-width: 900px) and (orientation: landscape) and (max-height: 600px) {
+  .kiosk-focus .premium-nav {
+    height: 60px;
+  }
+
+  .kiosk-focus .kiosk-page-container {
+    padding-top: 64px;
+  }
+
+  .kiosk-focus .kiosk-workspace {
+    flex-direction: row;
+  }
+
+  .kiosk-focus .kiosk-map-stage {
+    order: 0;
+    flex: 1 1 auto;
+    height: 100%;
+  }
+
+  .kiosk-focus .kiosk-sidebar {
+    flex: 0 0 42%;
+    max-height: none;
+  }
+
+  .kiosk-focus .kiosk-sidebar > * {
+    flex: 1 0 auto;
+  }
+
+  .kiosk-focus .kiosk-selected-card {
+    min-height: 100%;
+  }
+
+  .kiosk-focus .kiosk-card-media {
+    display: none;
   }
 }

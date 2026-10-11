@@ -131,7 +131,7 @@ export function getBlockTitleBadgeIcon(title, angleDeg = DEFAULT_GRID_ANGLE_DEG)
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="120" height="32" viewBox="0 0 120 32">
     <g transform="rotate(${-angleDeg}, 60, 16)">
       <rect x="4" y="4" width="112" height="24" rx="12" fill="rgba(15, 23, 42, 0.88)" stroke="#ffffff" stroke-width="1.5"/>
-      <text x="60" y="20" text-anchor="middle" fill="#ffffff" font-family="Georgia, serif" font-size="11.5" font-weight="700">${cleanTitle}</text>
+      <text x="60" y="20" text-anchor="middle" fill="#ffffff" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="11.5" font-weight="700">${cleanTitle}</text>
     </g>
   </svg>`;
   return {
@@ -185,7 +185,9 @@ export function createPlotLabelIcon({
     return s.length > max ? s.slice(0, max - 1) + "…" : s;
   };
 
-  const SERIF = "Georgia, 'Times New Roman', Times, serif";
+  // Marker SVGs are rendered as images, which cannot load web fonts, so use
+  // the system sans-serif closest to the app's Inter typeface.
+  const LABEL_FONT = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif";
   const names = showName
     ? deceasedNames.map((n) => truncate(n)).filter(Boolean).slice(0, 2)
     : [];
@@ -200,12 +202,12 @@ export function createPlotLabelIcon({
   let textSvg = "";
   if (names.length === 0) {
     // Vacant cell or number-only mode: clean centered cell number
-    textSvg = `<text x="${cx}" y="${cy + 4}" text-anchor="middle" font-family="${SERIF}" font-style="italic" font-size="11.5" font-weight="700" fill="#111827" stroke="#ffffff" stroke-width="2.4" paint-order="stroke fill">${escapeXml(cellNumber)}</text>`;
+    textSvg = `<text x="${cx}" y="${cy + 4}" text-anchor="middle" font-family="${LABEL_FONT}" font-size="11.5" font-weight="700" fill="#111827" stroke="#ffffff" stroke-width="2.4" paint-order="stroke fill">${escapeXml(cellNumber)}</text>`;
   } else {
     const firstY = cy - ((lineCount - 1) * lineHeight) / 2 + 4;
-    textSvg += `<text x="${cx}" y="${firstY}" text-anchor="middle" font-family="${SERIF}" font-style="italic" font-size="10.5" font-weight="700" fill="#111827" stroke="#ffffff" stroke-width="2.2" paint-order="stroke fill">${escapeXml(cellNumber)}. ${escapeXml(names[0])}</text>`;
+    textSvg += `<text x="${cx}" y="${firstY}" text-anchor="middle" font-family="${LABEL_FONT}" font-size="10.5" font-weight="700" fill="#111827" stroke="#ffffff" stroke-width="2.2" paint-order="stroke fill">${escapeXml(cellNumber)}. ${escapeXml(names[0])}</text>`;
     for (let i = 1; i < names.length; i++) {
-      textSvg += `<text x="${cx}" y="${firstY + i * lineHeight}" text-anchor="middle" font-family="${SERIF}" font-style="italic" font-size="10" font-weight="600" fill="#111827" stroke="#ffffff" stroke-width="2.2" paint-order="stroke fill">${escapeXml(names[i])}</text>`;
+      textSvg += `<text x="${cx}" y="${firstY + i * lineHeight}" text-anchor="middle" font-family="${LABEL_FONT}" font-size="10" font-weight="600" fill="#111827" stroke="#ffffff" stroke-width="2.2" paint-order="stroke fill">${escapeXml(names[i])}</text>`;
     }
   }
 

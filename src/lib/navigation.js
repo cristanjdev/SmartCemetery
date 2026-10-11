@@ -57,11 +57,21 @@ export function formatRouteSteps(steps) {
  * "arrive") with the segment name and distance when available. Always returns
  * a non-empty string so every numbered step has a description.
  *
- * @param {{ maneuver?: { type?: string, modifier?: string }, name?: string, distance?: number }} rawStep
+ * @param {{ maneuver?: { type?: string, modifier?: string }, name?: string, distance?: number, instruction?: string }} rawStep
  * @returns {string}
  */
 function buildInstruction(rawStep) {
   const step = rawStep && typeof rawStep === "object" ? rawStep : {};
+  const distance =
+    typeof step.distance === "number" && Number.isFinite(step.distance) && step.distance > 0
+      ? ` (${formatDistance(step.distance)})`
+      : "";
+
+  // Steps through the cemetery aisles carry their own sentence.
+  if (typeof step.instruction === "string" && step.instruction.trim()) {
+    return step.instruction.trim() + distance;
+  }
+
   const maneuver = step.maneuver && typeof step.maneuver === "object" ? step.maneuver : {};
 
   const type = typeof maneuver.type === "string" ? maneuver.type.trim() : "";
@@ -82,11 +92,7 @@ function buildInstruction(rawStep) {
   }
 
   // Append the distance when it is a positive finite number.
-  if (typeof step.distance === "number" && Number.isFinite(step.distance) && step.distance > 0) {
-    instruction += ` (${formatDistance(step.distance)})`;
-  }
-
-  return instruction;
+  return instruction + distance;
 }
 
 /**

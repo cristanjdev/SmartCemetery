@@ -31,8 +31,14 @@ import {
  * @param {{
  *   destination: { lat: number, lng: number } | null,
  *   onRouteChange: (coords: Array<[number, number]> | null) => void,
+ *     coords run [origin, ...route..., destination]: the route follows the
+ *     roads and then the cemetery aisles; the first and last segments are the
+ *     short off-path steps from the user and onto the plot (drawn dashed).
  *   plotId?: number,
  *   channel?: "dashboard" | "kiosk" | "public",
+ *   fixedOrigin?: { lat: number, lng: number, label: string },
+ *     when set (the on-site kiosk), routes always start here and the
+ *     browser's location is never requested.
  *   authenticated?: boolean,
  * }} props
  */
@@ -45,6 +51,7 @@ export default function NavigationOverlay({
   authenticated = false,
   hideTitle = false,
   flat = false,
+  fixedOrigin = null,
 }) {
   const [origin, setOrigin] = useState(null);
   const [steps, setSteps] = useState([]);
@@ -58,6 +65,12 @@ export default function NavigationOverlay({
     () => hasValidCoordinates(destination),
     [destination]
   );
+
+  function routeFromFixedOrigin() {
+    const start = { lat: fixedOrigin.lat, lng: fixedOrigin.lng };
+    setOrigin(start);
+    generateRoute(start);
+  }
 
   function requestGeolocation() {
     if (typeof navigator === "undefined" || !navigator.geolocation) {
@@ -124,7 +137,15 @@ export default function NavigationOverlay({
       }
 
       // GeoJSON coordinates are [lng, lat]; the map expects [lat, lng] pairs.
-      const coords = route.geometry.coordinates.map(([lng, lat]) => [lat, lng]);
+      // The route starts on the nearest road and ends in the aisle beside the
+      // plot. Anchor it to the user's real position and the exact plot so the
+      // route visibly reaches the grave.
+      const roadPath = route.geometry.coordinates.map(([lng, lat]) => [lat, lng]);
+      const coords = [
+        [originCoords.lat, originCoords.lng],
+        ...roadPath,
+        [destination.lat, destination.lng],
+      ];
 
       // Flatten legs -> steps (in leg order, then step order) before formatting.
       const rawSteps = Array.isArray(route.legs)
@@ -218,7 +239,7 @@ export default function NavigationOverlay({
           <button
             type="button"
             className="btn btn-primary btn-sm flex items-center justify-center gap-xs"
-            onClick={requestGeolocation}
+            onClick={fixedOrigin ? routeFromFixedOrigin : requestGeolocation}
             disabled={isBusy}
             aria-busy={isBusy}
             style={{ width: "100%" }}
@@ -228,7 +249,11 @@ export default function NavigationOverlay({
             ) : (
               <LocateFixed size={15} aria-hidden="true" />
             )}
-            {status === "ready" ? "Recalculate from my location" : "Use my location"}
+            {fixedOrigin
+              ? `Show route from ${fixedOrigin.label}`
+              : status === "ready"
+                ? "Recalculate from my location"
+                : "Use my location"}
           </button>
 
           {message && status !== "ready" && (
@@ -250,7 +275,9 @@ export default function NavigationOverlay({
           {origin && status === "ready" && (
             <div style={{ marginTop: 8 }}>
               <p className="text-sm" style={{ margin: "0 0 6px 0", color: "var(--accent-light, #34d399)", fontWeight: 500 }}>
-                ✓ Route calculated from your location
+                {fixedOrigin
+                  ? `✓ Route from ${fixedOrigin.label}`
+                  : "✓ Route calculated from your location"}
               </p>
               {onViewOnMap && (
                 <button

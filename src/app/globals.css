@@ -131,6 +131,23 @@ body {
   overflow-x: hidden;
 }
 
+/* Form controls don't inherit the page font by default (browsers fall back
+   to Arial), so every button, field and menu uses the app typeface. */
+button,
+input,
+select,
+textarea,
+optgroup {
+  font-family: inherit;
+}
+
+/* Equal-width digits so counts, dates and IDs line up in tables and cards. */
+table,
+.stat-value,
+.search-filter-count {
+  font-variant-numeric: tabular-nums;
+}
+
 /* Background gradient mesh removed for minimalism */
 body::before {
   display: none;
@@ -685,18 +702,6 @@ a.btn {
   overflow: hidden;
 }
 
-.sidebar-brand-icon {
-  width: 32px;
-  height: 32px;
-  border-radius: var(--radius-sm);
-  background: var(--primary);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 0.95rem;
-  flex-shrink: 0;
-  color: white;
-}
 
 .sidebar-brand-text {
   font-weight: 700;
@@ -853,7 +858,6 @@ html[data-theme="dark"] .sidebar-link.active {
   z-index: 40;
   background: var(--theme-sub-header-bg, #1e293b);
   backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
   border-bottom: 1px solid var(--theme-sub-header-border, rgba(255, 255, 255, 0.12));
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
   width: 100%;
@@ -1086,7 +1090,6 @@ body.modal-open .sidebar {
   inset: 0;
   background: rgba(2, 6, 23, 0.72);
   backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -2441,11 +2444,6 @@ body.map-fullscreen-active .alert {
   color: #fff;
 }
 
-.premium-brand-icon {
-  color: var(--primary-light);
-  display: flex;
-  align-items: center;
-}
 
 .premium-nav-links {
   display: flex;
@@ -2510,8 +2508,7 @@ body.map-fullscreen-active .alert {
   display: inline-flex;
   align-items: center;
   gap: 0.5rem;
-  animation: fadeDown 0.6s ease-out forwards;
-  opacity: 0;
+  animation: fadeDown 0.6s ease-out backwards;
 }
 
 .premium-title {
@@ -2521,8 +2518,7 @@ body.map-fullscreen-active .alert {
   letter-spacing: -0.04em;
   margin-bottom: 1.5rem;
   color: #fff;
-  animation: fadeUp 0.8s ease-out 0.1s forwards;
-  opacity: 0;
+  animation: fadeUp 0.8s ease-out 0.1s backwards;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -2539,16 +2535,14 @@ body.map-fullscreen-active .alert {
   max-width: 600px;
   line-height: 1.6;
   margin-bottom: 3rem;
-  animation: fadeUp 0.8s ease-out 0.2s forwards;
-  opacity: 0;
+  animation: fadeUp 0.8s ease-out 0.2s backwards;
 }
 
 .premium-search-container {
   width: 100%;
   max-width: 700px;
   position: relative;
-  animation: fadeUp 0.8s ease-out 0.3s forwards;
-  opacity: 0;
+  animation: fadeUp 0.8s ease-out 0.3s backwards;
 }
 
 .premium-search-form {
@@ -2629,8 +2623,7 @@ body.map-fullscreen-active .alert {
   padding: 2.5rem;
   text-align: left;
   transition: border-color 0.2s ease;
-  opacity: 0;
-  animation: fadeUp 0.8s ease-out forwards;
+  animation: fadeUp 0.8s ease-out backwards;
 }
 
 .premium-feature-card:nth-child(1) { animation-delay: 0.4s; }
@@ -2686,7 +2679,6 @@ body.map-fullscreen-active .alert {
   font-size: 0.9rem;
   position: relative;
   z-index: 10;
-  border-top: 1px solid rgba(255,255,255,0.05);
 }
 
 @keyframes fadeUp {
@@ -3448,7 +3440,6 @@ html[data-theme="light"] .hf-badge {
   padding: 1rem;
   background: var(--theme-overlay, rgba(2, 6, 23, 0.65));
   backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
   animation: hf-fade-in 0.15s ease;
 }
 

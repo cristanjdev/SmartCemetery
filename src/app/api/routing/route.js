@@ -4,6 +4,7 @@ import {
   RoutingServiceError,
   validateRoutingRequest,
 } from "@/lib/routing";
+import { loadWalkwayNetwork } from "@/lib/walkway-data";
 import { getClientIp } from "@/lib/audit";
 import { boundedRateLimit, consumeRateLimit } from "@/lib/rate-limit";
 
@@ -46,7 +47,13 @@ export async function POST(request) {
 
   try {
     const coordinates = validateRoutingRequest(body);
-    const route = await requestRoute(coordinates);
+    // Without the rows (e.g. the database is unreachable) the road provider
+    // still routes, just without the walk through the aisles.
+    const walkways = await loadWalkwayNetwork().catch((error) => {
+      console.error("Walkway network unavailable:", error);
+      return null;
+    });
+    const route = await requestRoute(coordinates, { walkways });
     return NextResponse.json(route);
   } catch (error) {
     if (error instanceof RoutingServiceError) {

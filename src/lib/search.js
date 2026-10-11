@@ -105,6 +105,19 @@ export async function smartSearch(prisma, rawQuery) {
   const query = String(rawQuery ?? "").trim();
   if (!query) return result([], [], "none");
 
+  // Wildcard query: "*" or "%" retrieves registry records
+  if (query === "*" || query === "%" || query.toLowerCase() === "all") {
+    const all = await prisma.grave.findMany({
+      include: GRAVE_INCLUDE,
+      orderBy: { id: "asc" },
+      take: 60,
+    });
+    return result(all, [], "all");
+  }
+
+  // If query contains wildcard asterisks (e.g. "Rizal*"), clean it for contains matching
+  const cleanQuery = query.replace(/\*+/g, "").trim();
+
   if (/^\d+$/.test(query)) {
     const id = Number(query);
     if (Number.isSafeInteger(id) && id > 0) {
@@ -134,8 +147,9 @@ export async function smartSearch(prisma, rawQuery) {
     }
   }
 
+  const searchTerm = cleanQuery || query;
   const exact = await prisma.grave.findMany({
-    where: { deceasedName: { contains: query } },
+    where: { deceasedName: { contains: searchTerm } },
     include: GRAVE_INCLUDE,
     orderBy: { id: "asc" },
     take: 20,

@@ -41,11 +41,14 @@ async function mockSearch(page) {
   }));
 }
 
-test("kiosk deep-link selects a grave and routes anonymously", async ({ page, context, baseURL }, testInfo) => {
+// The kiosk is a fixed on-site screen: every route starts at the configured
+// start point (default: CMP Admin Office), never at browser geolocation.
+const KIOSK_START = { lat: 8.4661065, lng: 124.65747 };
+const ROUTE_BUTTON = /Show route from CMP Admin Office/;
+
+test("kiosk deep-link selects a grave and routes from the admin office", async ({ page }, testInfo) => {
   onlyPrimaryViewport(testInfo);
   await mockSearch(page);
-  await context.grantPermissions(["geolocation"], { origin: baseURL });
-  await context.setGeolocation({ latitude: 8.4647, longitude: 124.6578 });
 
   let navigationLogs = 0;
   await page.route("**/api/navigation", (route) => {
@@ -54,39 +57,42 @@ test("kiosk deep-link selects a grave and routes anonymously", async ({ page, co
   });
   await page.route("**/api/routing", async (route) => {
     const body = route.request().postDataJSON();
+    expect(body.origin).toEqual(KIOSK_START);
     expect(body.destination).toEqual({ lat: 8.4648, lng: 124.6579 });
     await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(routeResponse) });
   });
 
   await page.goto("/kiosk?grave=42", { waitUntil: "domcontentloaded" });
   await expect(page.getByTestId("kiosk-selection")).toContainText("Maria Santos");
-  await page.getByRole("button", { name: "Use my location" }).click();
-  await expect(page.getByText("Route from your location to the selected plot.")).toBeVisible();
+  await page.getByRole("button", { name: ROUTE_BUTTON }).click();
+  await expect(page.getByText("✓ Route from CMP Admin Office")).toBeVisible();
+  await expect(page.getByRole("list", { name: "Step-by-step directions" })).toBeVisible();
   expect(navigationLogs).toBe(0);
 });
 
-test("kiosk exposes denied-location and provider-failure retry states", async ({ page }, testInfo) => {
+test("kiosk never asks the browser for the visitor's location", async ({ page }, testInfo) => {
   onlyPrimaryViewport(testInfo);
   await mockSearch(page);
   await page.addInitScript(() => {
+    window.__geoCalls = 0;
     Object.defineProperty(navigator, "geolocation", {
       configurable: true,
-      value: { getCurrentPosition: (_success, failure) => failure({ code: 1 }) },
+      value: { getCurrentPosition: () => { window.__geoCalls += 1; } },
     });
   });
-  await page.goto("/kiosk", { waitUntil: "domcontentloaded" });
-  await page.getByLabel("Search by name, grave ID, or burial year").fill("42");
-  await page.getByRole("button", { name: "Search", exact: true }).click();
-  await page.getByRole("button", { name: /Maria Santos/ }).click();
-  await page.getByRole("button", { name: "Use my location" }).click();
-  await expect(page.locator("p[role='alert']")).toContainText("Location access was denied");
+  await page.route("**/api/routing", (route) =>
+    route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(routeResponse) }));
+
+  await page.goto("/kiosk?grave=42", { waitUntil: "domcontentloaded" });
+  await expect(page.getByTestId("kiosk-selection")).toContainText("Maria Santos");
+  await page.getByRole("button", { name: ROUTE_BUTTON }).click();
+  await expect(page.getByText("✓ Route from CMP Admin Office")).toBeVisible();
+  expect(await page.evaluate(() => window.__geoCalls)).toBe(0);
 });
 
-test("kiosk can retry after a routing provider failure", async ({ page, context, baseURL }, testInfo) => {
+test("kiosk can retry after a routing provider failure", async ({ page }, testInfo) => {
   onlyPrimaryViewport(testInfo);
   await mockSearch(page);
-  await context.grantPermissions(["geolocation"], { origin: baseURL });
-  await context.setGeolocation({ latitude: 8.4647, longitude: 124.6578 });
   let attempts = 0;
   await page.route("**/api/routing", (route) => {
     attempts += 1;
@@ -97,10 +103,10 @@ test("kiosk can retry after a routing provider failure", async ({ page, context,
 
   await page.goto("/kiosk?grave=42", { waitUntil: "domcontentloaded" });
   await expect(page.getByTestId("kiosk-selection")).toBeVisible();
-  await page.getByRole("button", { name: "Use my location" }).click();
+  await page.getByRole("button", { name: ROUTE_BUTTON }).click();
   await expect(page.locator("p[role='alert']")).toContainText("temporarily unavailable");
-  await page.getByRole("button", { name: "Use my location" }).click();
-  await expect(page.getByText("Route from your location to the selected plot.")).toBeVisible();
+  await page.getByRole("button", { name: ROUTE_BUTTON }).click();
+  await expect(page.getByText("✓ Route from CMP Admin Office")).toBeVisible();
   expect(attempts).toBe(2);
 });
 
@@ -113,7 +119,7 @@ test("kiosk clears private state after inactivity", async ({ page }, testInfo) =
   await expect(page.getByTestId("kiosk-selection")).toBeVisible();
   await page.clock.fastForward(120_100);
   await expect(page.getByTestId("kiosk-selection")).toHaveCount(0);
-  await expect(page.getByLabel("Search by name, grave ID, or burial year")).toHaveValue("");
+  await expect(page.getByLabel("Search records by name, ID, or plot")).toHaveValue("");
   await expect(page).toHaveURL(/\/kiosk$/);
 });
 
@@ -132,6 +138,9 @@ test("kiosk blocks routing when a grave has no GPS coordinates", async ({ page }
     return route.abort();
   });
   await page.goto("/kiosk?grave=42", { waitUntil: "domcontentloaded" });
-  await expect(page.getByText("Directions unavailable — this plot has no GPS coordinates.")).toBeVisible();
+  // The record still shows, but no directions panel is offered at all.
+  await expect(page.getByTestId("kiosk-selection")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Use my location" })).toHaveCount(0);
+  await expect(page.getByText("Directions unavailable — this plot has no GPS coordinates.")).toHaveCount(0);
   expect(routingCalls).toBe(0);
 });

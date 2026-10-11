@@ -1,5 +1,6 @@
-import { DEFAULT_MAP_CENTER, resolveMapCenter } from "@/lib/config";
+import { DEFAULT_MAP_CENTER, KIOSK_START_POINT, resolveMapCenter } from "@/lib/config";
 import { hasValidCoordinates } from "@/lib/navigation";
+import { findWalkingRoute, isOnSite } from "@/lib/walkways";
 
 const DEFAULT_TIMEOUT_MS = 8_000;
 const DEFAULT_RADIUS_METERS = 5_000;
@@ -81,6 +82,9 @@ export function getServerRoutingConfig(env = process.env) {
       ? radiusValue
       : DEFAULT_RADIUS_METERS,
     center: resolveMapCenter(env) || DEFAULT_MAP_CENTER,
+    // Where visitors arriving from outside walk into the cemetery (the
+    // admin office, also the kiosk's spot).
+    entrance: KIOSK_START_POINT,
   };
 }
 
@@ -132,9 +136,7 @@ function safeRoute(providerData) {
   };
 }
 
-export async function requestRoute({ origin, destination }, options = {}) {
-  const config = options.config || getServerRoutingConfig(options.env);
-  assertWithinCemeteryRadius({ origin, destination }, config);
+async function requestProviderRoute(origin, destination, config, options) {
   const routePath = `${config.baseUrl}/route/v1/${encodeURIComponent(config.profile)}/` +
     `${origin.lng},${origin.lat};${destination.lng},${destination.lat}`;
   const url = new URL(routePath);
@@ -168,5 +170,62 @@ export async function requestRoute({ origin, destination }, options = {}) {
   } catch {
     throw new RoutingServiceError(502, "INVALID_PROVIDER_RESPONSE", "The routing provider returned an invalid response.");
   }
-  return { code: "Ok", routes: [safeRoute(providerData)] };
+  return safeRoute(providerData);
+}
+
+const lowerFirst = (text) => text.charAt(0).toLowerCase() + text.slice(1);
+
+/**
+ * Join a road route (or none, when the visitor is already on site) and the
+ * walk through the aisles into one route in the provider's response shape.
+ */
+function joinRoute(road, walk, startLabel) {
+  const walkSteps = walk.steps.map((step, index) =>
+    index === 0 && startLabel
+      ? { ...step, instruction: `From the ${startLabel}, ${lowerFirst(step.instruction)}` }
+      : step
+  );
+  const roadSteps = road
+    ? road.legs.flatMap((leg) => leg.steps).filter((step) => step.maneuver.type !== "arrive")
+    : [];
+  const coordinates = [
+    ...(road ? road.geometry.coordinates : []),
+    ...walk.path.map(({ lat, lng }) => [lng, lat]),
+  ];
+  return {
+    geometry: { type: "LineString", coordinates },
+    legs: [{ steps: [...roadSteps, ...walkSteps] }],
+    distance: (road?.distance ?? 0) + walk.distance,
+    duration: (road?.duration ?? 0) + walk.duration,
+  };
+}
+
+/**
+ * Route from `origin` to a plot. With a walkway network (the building rows),
+ * the part inside the cemetery follows the aisles around the rows: a visitor
+ * already on site walks from where they are, anyone else is routed by road
+ * to the entrance and walks in from there. Without one, the road provider
+ * routes the whole way.
+ */
+export async function requestRoute({ origin, destination }, options = {}) {
+  const config = options.config || getServerRoutingConfig(options.env);
+  assertWithinCemeteryRadius({ origin, destination }, config);
+
+  const network = options.walkways;
+  if (network?.blocks?.length) {
+    const entrance = config.entrance;
+    const onSite = isOnSite(network, origin);
+    const walkStart = onSite ? origin : { lat: entrance.lat, lng: entrance.lng };
+    const walk = findWalkingRoute(network, walkStart, destination);
+    if (walk) {
+      const startsAtEntrance = !onSite || distanceMeters(origin, entrance) < 10;
+      const road = onSite ? null : await requestProviderRoute(origin, walkStart, config, options);
+      return {
+        code: "Ok",
+        routes: [joinRoute(road, walk, startsAtEntrance ? entrance.label : "")],
+      };
+    }
+  }
+
+  return { code: "Ok", routes: [await requestProviderRoute(origin, destination, config, options)] };
 }
