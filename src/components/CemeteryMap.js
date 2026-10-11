@@ -112,6 +112,8 @@ function GoogleMapLoadedView({
   // (they cannot take a record), and `fitPlots` frames every plot on load.
   dimmedPlotIds = null,
   fitPlots = false,
+  // The status legend doubles as a filter for staff; the kiosk hides it.
+  showLegend = true,
 }) {
   const { lat, lng } = getClientMapCenter();
   const center = useMemo(() => ({ lat, lng }), [lat, lng]);
@@ -1070,96 +1072,98 @@ function GoogleMapLoadedView({
       </div>
 
       {/* ─── Top-Right: Plot Legend Overlay (reference-style light panel) ─── */}
-      <div
-        style={{
-          position: "absolute",
-          top: 16,
-          right: 16,
-          zIndex: 10,
-          background: "rgba(255, 255, 255, 0.95)",
-          backdropFilter: "blur(8px)",
-          WebkitBackdropFilter: "blur(8px)",
-          borderRadius: "var(--radius-md, 8px)",
-          border: "1px solid rgba(15, 23, 42, 0.14)",
-          boxShadow: "0 4px 16px rgba(0, 0, 0, 0.28)",
-          padding: "10px 14px",
-          display: "flex",
-          flexDirection: "column",
-          gap: 5,
-          minWidth: 128,
-        }}
-      >
-        {[
-          { key: "sold", label: "Sold" },
-          { key: "hold", label: "Hold" },
-          { key: "occupied", label: "Occupied" },
-          { key: "available", label: "Available" },
-          { key: "unavailable", label: "Unavailable" },
-        ].map((item) => {
-          const isActive = effectiveFilter === item.key;
-          return (
-            <div
-              key={item.key}
+      {showLegend && (
+        <div
+          style={{
+            position: "absolute",
+            top: 16,
+            right: 16,
+            zIndex: 10,
+            background: "rgba(255, 255, 255, 0.95)",
+            backdropFilter: "blur(8px)",
+            WebkitBackdropFilter: "blur(8px)",
+            borderRadius: "var(--radius-md, 8px)",
+            border: "1px solid rgba(15, 23, 42, 0.14)",
+            boxShadow: "0 4px 16px rgba(0, 0, 0, 0.28)",
+            padding: "10px 14px",
+            display: "flex",
+            flexDirection: "column",
+            gap: 5,
+            minWidth: 128,
+          }}
+        >
+          {[
+            { key: "sold", label: "Sold" },
+            { key: "hold", label: "Hold" },
+            { key: "occupied", label: "Occupied" },
+            { key: "available", label: "Available" },
+            { key: "unavailable", label: "Unavailable" },
+          ].map((item) => {
+            const isActive = effectiveFilter === item.key;
+            return (
+              <div
+                key={item.key}
+                onClick={() => {
+                  const next = isActive ? "all" : item.key;
+                  setActiveFilter(next);
+                  if (typeof onStatusFilterChange === "function") onStatusFilterChange(next);
+                }}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8,
+                  fontSize: "0.8rem",
+                  cursor: "pointer",
+                  padding: "2px 4px",
+                  margin: "0 -4px",
+                  borderRadius: 4,
+                  background: isActive ? "rgba(15, 23, 42, 0.08)" : "transparent",
+                  transition: "background 0.15s ease",
+                }}
+                title={`Click to filter by ${item.label}`}
+              >
+                <div
+                  style={{
+                    width: 11,
+                    height: 11,
+                    borderRadius: 2,
+                    flexShrink: 0,
+                    background: getPlotStatusColor(item.key),
+                    border: "1px solid rgba(0, 0, 0, 0.4)",
+                  }}
+                />
+                <span style={{ color: "#1f2937", fontWeight: isActive ? 700 : 500 }}>
+                  {item.label}
+                </span>
+              </div>
+            );
+          })}
+
+          {effectiveFilter !== "all" && (
+            <button
+              type="button"
               onClick={() => {
-                const next = isActive ? "all" : item.key;
-                setActiveFilter(next);
-                if (typeof onStatusFilterChange === "function") onStatusFilterChange(next);
+                setActiveFilter("all");
+                if (typeof onStatusFilterChange === "function") onStatusFilterChange("all");
               }}
               style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 8,
-                fontSize: "0.8rem",
+                background: "transparent",
+                border: "none",
+                borderTop: "1px solid rgba(15, 23, 42, 0.12)",
+                color: "#0369a1",
+                fontSize: "0.7rem",
+                fontWeight: 600,
                 cursor: "pointer",
-                padding: "2px 4px",
-                margin: "0 -4px",
-                borderRadius: 4,
-                background: isActive ? "rgba(15, 23, 42, 0.08)" : "transparent",
-                transition: "background 0.15s ease",
+                padding: "5px 4px 1px",
+                margin: "2px -4px 0",
+                textAlign: "left",
               }}
-              title={`Click to filter by ${item.label}`}
             >
-              <div
-                style={{
-                  width: 11,
-                  height: 11,
-                  borderRadius: 2,
-                  flexShrink: 0,
-                  background: getPlotStatusColor(item.key),
-                  border: "1px solid rgba(0, 0, 0, 0.4)",
-                }}
-              />
-              <span style={{ color: "#1f2937", fontWeight: isActive ? 700 : 500 }}>
-                {item.label}
-              </span>
-            </div>
-          );
-        })}
-
-        {effectiveFilter !== "all" && (
-          <button
-            type="button"
-            onClick={() => {
-              setActiveFilter("all");
-              if (typeof onStatusFilterChange === "function") onStatusFilterChange("all");
-            }}
-            style={{
-              background: "transparent",
-              border: "none",
-              borderTop: "1px solid rgba(15, 23, 42, 0.12)",
-              color: "#0369a1",
-              fontSize: "0.7rem",
-              fontWeight: 600,
-              cursor: "pointer",
-              padding: "5px 4px 1px",
-              margin: "2px -4px 0",
-              textAlign: "left",
-            }}
-          >
-            Reset filter
-          </button>
-        )}
-      </div>
+              Reset filter
+            </button>
+          )}
+        </div>
+      )}
 
       {/* ─── Google Map Instance ─── */}
       <GoogleMap

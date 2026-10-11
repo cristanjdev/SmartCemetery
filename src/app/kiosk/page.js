@@ -36,9 +36,9 @@ function inactivityMilliseconds() {
   return seconds * 1000;
 }
 
-// The kiosk map has nothing overlaid on its left; only the status legend
-// (top-right) and map-type control (top-left) need clearance.
-const KIOSK_ROUTE_FIT_PADDING = { top: 90, right: 180, bottom: 60, left: 60 };
+// The kiosk map shows no status legend, so only the map-type control
+// (top-left) needs clearance.
+const KIOSK_ROUTE_FIT_PADDING = { top: 90, right: 60, bottom: 60, left: 60 };
 
 function hasGps(plot) {
   return (
@@ -564,6 +564,7 @@ function KioskPanel({ initialGrave }) {
                   routeCoords={routeCoords}
                   routeFitPadding={KIOSK_ROUTE_FIT_PADDING}
                   focusPoint={hasGps(selectedPlot) ? destination : null}
+                  showLegend={false}
                 />
               </div>
             </div>
