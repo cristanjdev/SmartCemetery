@@ -27,6 +27,8 @@ import {
   isBuildingPlot,
 } from "@/lib/cemetery-layout";
 import { DEFAULT_GRID_ANGLE_DEG } from "@/lib/config";
+import { installMapsAuthFailureHandler, useMapsAuthFailed } from "@/lib/maps-auth";
+import { MapUnavailable } from "@/components/map/MapUnavailable";
 import {
   getBuildingMoveAnchorIcon,
   getBuildingLengthHandleIcon,
@@ -59,6 +61,10 @@ const WRAPPER_STYLE = {
   overflow: "hidden",
 };
 const CONTAINER_STYLE = { width: "100%", height: "100%" };
+
+// Must be in place before the Maps script runs, so Google reports a rejected
+// API key to us instead of only drawing its own error box.
+if (typeof window !== "undefined") installMapsAuthFailureHandler(window);
 
 const BASE_OPTIONS = {
   mapTypeId: "hybrid",
@@ -129,6 +135,7 @@ function GoogleMapLoadedView({
     googleMapsApiKey: apiKey,
   });
   const isLoaded = isGoogleAlreadyLoaded || scriptLoaded;
+  const mapsAuthFailed = useMapsAuthFailed();
 
   const [map, setMap] = useState(null);
   // Becomes true only when the Google "maps" library is fully constructed
@@ -747,6 +754,10 @@ function GoogleMapLoadedView({
   const standalonePlots = useMemo(() => {
     return visiblePlots.filter((p) => !getBuildingKey(p));
   }, [visiblePlots]);
+
+  if (mapsAuthFailed) {
+    return <MapUnavailable />;
+  }
 
   if (loadError && !isGoogleAlreadyLoaded) {
     return (

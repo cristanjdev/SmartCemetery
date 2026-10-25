@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Search, MapPinned, BookOpenText, ChartSpline, ChevronRight, User, Images, ImageOff } from "lucide-react";
 import { PublicThemeToggle } from "@/components/ui/PublicThemeToggle";
+import { SearchBar } from "@/components/ui/SearchBar";
 import { LandingSlideshow } from "@/components/landing/LandingSlideshow";
 import { SITE_NAME } from "@/lib/config";
 
@@ -130,11 +131,12 @@ export function LandingPage({ slides = [] }) {
           <span>{SITE_NAME}</span>
         </Link>
         <div className="premium-nav-links fade-in-up delay-100">
-          <Link href="/search" className="btn btn-ghost">
-            Search Directory
+          <Link href="/search" className="btn btn-ghost premium-nav-link" aria-label="Search Directory">
+            <Search size={20} aria-hidden="true" />
+            <span className="premium-nav-label">Search Directory</span>
           </Link>
           <PublicThemeToggle />
-          <Link href="/login" className="btn btn-ghost" style={{ width: '44px', padding: 0 }} aria-label="Admin Login" title="Admin Login">
+          <Link href="/login" className="btn btn-ghost premium-nav-icon" aria-label="Admin Login" title="Admin Login">
             <User size={20} />
           </Link>
         </div>
@@ -150,22 +152,13 @@ export function LandingPage({ slides = [] }) {
           Experience the future of cemetery management. Digitalized burial records, interactive map navigation, smart search, and real-time monitoring tailored for seamless navigation.
         </p>
 
-        <div className="premium-search-container">
-          <form className="premium-search-form" onSubmit={handleSearch}>
-            <Search className="premium-search-icon" size={20} />
-            <input
-              type="text"
-              className="premium-search-input"
-              autoComplete="off"
-              placeholder="Search by deceased name, grave ID..."
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-            />
-            <button type="submit" className="btn btn-primary">
-              Locate <ChevronRight size={18} />
-            </button>
-          </form>
-        </div>
+        <SearchBar
+          value={query}
+          onChange={setQuery}
+          onSubmit={handleSearch}
+          placeholder="Name, grave ID, or year"
+          ariaLabel="Search records by name, ID, or year"
+        />
       </div>
 
       {/* Features */}

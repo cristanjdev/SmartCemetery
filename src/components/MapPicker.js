@@ -3,8 +3,13 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { GoogleMap, MarkerF, useJsApiLoader } from "@react-google-maps/api";
 import { getClientMapCenter, getClientGoogleMapsApiKey } from "../lib/config";
+import { installMapsAuthFailureHandler, useMapsAuthFailed } from "@/lib/maps-auth";
+import { MapUnavailable } from "@/components/map/MapUnavailable";
 
 const CONTAINER_STYLE = { width: "100%", height: "300px", borderRadius: "var(--radius-md)" };
+
+// Report a rejected API key to us before the Maps script runs.
+if (typeof window !== "undefined") installMapsAuthFailureHandler(window);
 
 const OPTIONS = {
   mapTypeId: "hybrid",
@@ -34,6 +39,7 @@ export default function MapPicker({ defaultLat, defaultLng, onChange }) {
     id: "cemetery-google-maps",
     googleMapsApiKey: getClientGoogleMapsApiKey(),
   });
+  const mapsAuthFailed = useMapsAuthFailed();
 
   useEffect(() => {
     if (position) onChange(position.lat, position.lng);
@@ -44,6 +50,10 @@ export default function MapPicker({ defaultLat, defaultLng, onChange }) {
       setPosition({ lat: event.latLng.lat(), lng: event.latLng.lng() });
     }
   }, []);
+
+  if (mapsAuthFailed) {
+    return <MapUnavailable />;
+  }
 
   if (loadError) {
     return (

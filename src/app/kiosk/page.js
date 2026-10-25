@@ -18,6 +18,7 @@ import {
 import NavigationOverlay from "@/components/NavigationOverlay";
 import { hasValidCoordinates } from "@/lib/navigation";
 import { PublicThemeToggle } from "@/components/ui/PublicThemeToggle";
+import { SearchBar } from "@/components/ui/SearchBar";
 import { KIOSK_START_POINT, SITE_NAME } from "@/lib/config";
 
 const CemeteryMap = dynamic(() => import("@/components/CemeteryMap"), {
@@ -39,6 +40,14 @@ function inactivityMilliseconds() {
 // The kiosk map shows no status legend, so only the map-type control
 // (top-left) needs clearance.
 const KIOSK_ROUTE_FIT_PADDING = { top: 90, right: 60, bottom: 60, left: 60 };
+
+// The inactivity reset clears a shared kiosk screen for the next visitor. On
+// a visitor's own phone (portrait or landscape) it would wipe the route while
+// they walk, so phones skip it.
+const PERSONAL_DEVICE_QUERY = "(max-width: 767px), (max-height: 500px)";
+// Below this width the map sits above the details, out of view once the
+// visitor scrolls down to the directions.
+const STACKED_LAYOUT_QUERY = "(max-width: 900px)";
 
 function hasGps(plot) {
   return (
@@ -92,6 +101,7 @@ function KioskPanel({ initialGrave }) {
 
   // Inactivity auto-reset
   useEffect(() => {
+    if (window.matchMedia(PERSONAL_DEVICE_QUERY).matches) return undefined;
     let timer;
     const restart = () => {
       clearTimeout(timer);
@@ -141,6 +151,8 @@ function KioskPanel({ initialGrave }) {
   }, [initialGrave]);
 
   const allResults = useMemo(() => uniqueResults(results), [results]);
+  // Before any search: the side panel only holds the "Ready to Navigate" hint.
+  const showIdlePanel = !selectedGrave && allResults.length === 0 && (loading || !results);
 
   const plots = useMemo(
     () =>
@@ -217,6 +229,17 @@ function KioskPanel({ initialGrave }) {
     }
   };
 
+  // When a route appears on a stacked (phone) layout, bring the map back
+  // into view so the visitor sees the path, not just the step list.
+  const showRoute = useCallback((coords) => {
+    setRouteCoords(coords);
+    if (coords && window.matchMedia(STACKED_LAYOUT_QUERY).matches) {
+      document
+        .querySelector('[data-testid="kiosk-map"]')
+        ?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  }, []);
+
   const goBack = () => {
     let sameOriginReferrer = false;
     try {
@@ -254,38 +277,19 @@ function KioskPanel({ initialGrave }) {
         </Link>
 
         <div className="premium-nav-links">
-          <Link
-            href="/search"
-            className="btn btn-ghost"
-            style={{
-              minHeight: "44px",
-              minWidth: "44px",
-              display: "inline-flex",
-              alignItems: "center",
-              gap: "0.45rem",
-              padding: "0 0.85rem",
-            }}
-          >
-            <Search size={18} aria-hidden="true" />
-            <span className="kiosk-nav-label">Directory</span>
+          <Link href="/search" className="btn btn-ghost premium-nav-link" aria-label="Directory">
+            <Search size={20} aria-hidden="true" />
+            <span className="premium-nav-label">Directory</span>
           </Link>
           <button
             type="button"
-            className="btn btn-ghost"
+            className="btn btn-ghost premium-nav-link"
             onClick={resetKiosk}
             title="Reset Kiosk"
             aria-label="Reset Kiosk"
-            style={{
-              minHeight: "44px",
-              minWidth: "44px",
-              display: "inline-flex",
-              alignItems: "center",
-              gap: "0.45rem",
-              padding: "0 0.85rem",
-            }}
           >
-            <RotateCcw size={17} aria-hidden="true" />
-            <span className="kiosk-nav-label">Reset</span>
+            <RotateCcw size={20} aria-hidden="true" />
+            <span className="premium-nav-label">Reset</span>
           </button>
           <PublicThemeToggle />
         </div>
@@ -301,47 +305,19 @@ function KioskPanel({ initialGrave }) {
             Search for a burial record to highlight the grave plot on the map and receive walking directions.
           </p>
 
-          <form onSubmit={handleSearch} className="search-form-shell kiosk-search-form" role="search">
-            <div className="search-input-group">
-              <div className="search-input-field-wrapper">
-                <div className="search-field-icon" aria-hidden="true">
-                  <Search size={20} />
-                </div>
-                <input
-                  id="kiosk-search-input"
-                  type="text"
-                  className="search-main-input"
-                  autoComplete="off"
-                  placeholder="Search by deceased name, ID, or plot number..."
-                  value={query}
-                  onChange={(e) => setQuery(e.target.value)}
-                  aria-label="Search records by name, ID, or plot"
-                  autoFocus
-                />
-                {query.length > 0 && (
-                  <button
-                    type="button"
-                    className="search-clear-btn"
-                    onClick={handleClear}
-                    aria-label="Clear search text"
-                    title="Clear"
-                  >
-                    <X size={16} />
-                  </button>
-                )}
-              </div>
-              <button
-                id="kiosk-search-btn"
-                type="submit"
-                className="btn btn-primary search-submit-btn"
-                disabled={loading}
-                aria-label="Search"
-              >
-                <Search size={18} aria-hidden="true" />
-                <span>{loading ? "Searching…" : "Search"}</span>
-              </button>
-            </div>
-          </form>
+          <SearchBar
+            className="search-bar-spaced"
+            inputId="kiosk-search-input"
+            buttonId="kiosk-search-btn"
+            value={query}
+            onChange={setQuery}
+            onSubmit={handleSearch}
+            onClear={handleClear}
+            loading={loading}
+            placeholder="Name, grave ID, or plot"
+            ariaLabel="Search records by name, ID, or plot"
+            autoFocus
+          />
         </header>
         )}
 
@@ -354,7 +330,10 @@ function KioskPanel({ initialGrave }) {
         {/* Workspace: Left Master-Detail Sidebar + Right Map Stage */}
         <div className="kiosk-workspace">
           {/* Left Column: Sidebar with Details & Actions */}
-          <aside className="kiosk-sidebar" aria-label="Memorial Details and Navigation">
+          <aside
+            className={`kiosk-sidebar${showIdlePanel ? " kiosk-sidebar-idle" : ""}`}
+            aria-label="Memorial Details and Navigation"
+          >
             {selectedGrave ? (
               /* Selected Memorial Card */
               <div className="kiosk-selected-card" data-testid="kiosk-selection">
@@ -411,7 +390,7 @@ function KioskPanel({ initialGrave }) {
                       <NavigationOverlay
                         key={selectedGrave.id}
                         destination={destination}
-                        onRouteChange={setRouteCoords}
+                        onRouteChange={showRoute}
                         plotId={selectedPlot?.id}
                         channel="kiosk"
                         fixedOrigin={KIOSK_START_POINT}
@@ -533,7 +512,7 @@ function KioskPanel({ initialGrave }) {
                   </span>
                 </div>
                 <div className="kiosk-map-header-end">
-                  <span className="kiosk-map-title">
+                  <span className={`kiosk-map-title${selectedPlot ? "" : " kiosk-map-title-generic"}`}>
                     {selectedPlot ? `Plot ${selectedPlot.plotNumber}` : "Interactive Cemetery Map"}
                   </span>
                   {selectedGrave && !focusMode && (

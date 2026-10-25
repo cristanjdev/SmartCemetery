@@ -4,7 +4,7 @@ import { Suspense, useState } from "react";
 import { signIn } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { AlertTriangle, ArrowRight, Lock, Mail, ChevronLeft, Eye, EyeOff } from "lucide-react";
+import { AlertTriangle, ArrowLeft, ArrowRight, Lock, Mail, ChevronLeft, Eye, EyeOff } from "lucide-react";
 import { PublicThemeToggle } from "@/components/ui/PublicThemeToggle";
 import { toast } from "sonner";
 import { resolveCallback } from "@/lib/route-access";
@@ -95,6 +95,16 @@ function LoginForm() {
 
       {/* Form Area */}
       <div className="auth-form-container">
+        {/* Phones and tablets: back to the public portal, opposite the theme
+            toggle (the sidebar has the full link on wide screens). */}
+        <Link
+          href="/"
+          className="public-theme-toggle auth-back-link"
+          aria-label="Return to public portal"
+          title="Return to public portal"
+        >
+          <ArrowLeft size={19} aria-hidden="true" />
+        </Link>
         <PublicThemeToggle className="auth-theme-toggle" />
         <div className="auth-card-premium">
           <h2 style={{ fontSize: '1.75rem', fontWeight: 700, color: '#fff', marginBottom: '0.5rem', letterSpacing: '-0.01em' }}>Welcome Back</h2>
@@ -124,7 +134,14 @@ function LoginForm() {
             </div>
           )}
 
-          <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+          {/* Chrome on iOS stamps its own autofill attributes on forms and
+              inputs before React hydrates; ignore attribute differences on
+              the form and its inputs only. */}
+          <form
+            onSubmit={handleSubmit}
+            style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}
+            suppressHydrationWarning
+          >
             <div>
               <label className="form-label" htmlFor="login-email">Email Address</label>
               <div className="input-with-icon">
@@ -133,6 +150,7 @@ function LoginForm() {
                   type="email"
                   id="login-email"
                   className="form-input"
+                  suppressHydrationWarning
                   placeholder="admin@cemetery.gov.ph"
                   value={email}
                   onChange={(e) => {
@@ -156,6 +174,7 @@ function LoginForm() {
                   type={showPassword ? "text" : "password"}
                   id="login-password"
                   className="form-input"
+                  suppressHydrationWarning
                   placeholder="Enter your password"
                   value={password}
                   onChange={(e) => {
@@ -217,19 +236,6 @@ function LoginForm() {
             </button>
           </form>
 
-
-
-          {/* Mobile Back Link */}
-          <div style={{ marginTop: '2.5rem', textAlign: 'center', display: 'block' }} className="mobile-only-link">
-            <Link href="/" style={{ color: 'var(--text-muted)', fontSize: '0.9rem', textDecoration: 'none', transition: 'color 0.2s ease' }} onMouseOver={e => e.currentTarget.style.color = '#fff'} onMouseOut={e => e.currentTarget.style.color = 'var(--text-muted)'}>
-              ← Return to public portal
-            </Link>
-          </div>
-          <style dangerouslySetInnerHTML={{__html: `
-            @media (min-width: 992px) {
-              .mobile-only-link { display: none !important; }
-            }
-          `}} />
         </div>
       </div>
     </div>

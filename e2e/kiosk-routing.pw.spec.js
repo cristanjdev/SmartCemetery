@@ -113,6 +113,8 @@ test("kiosk can retry after a routing provider failure", async ({ page }, testIn
 
 test("kiosk clears private state after inactivity", async ({ page }, testInfo) => {
   onlyPrimaryViewport(testInfo);
+  // A kiosk terminal screen; phones skip the reset (next test).
+  await page.setViewportSize({ width: 1280, height: 900 });
   await page.clock.install();
   await mockSearch(page);
   await page.goto("/kiosk?grave=42", { waitUntil: "domcontentloaded" });
@@ -121,6 +123,18 @@ test("kiosk clears private state after inactivity", async ({ page }, testInfo) =
   await expect(page.getByTestId("kiosk-selection")).toHaveCount(0);
   await expect(page.getByLabel("Search records by name, ID, or plot")).toHaveValue("");
   await expect(page).toHaveURL(/\/kiosk$/);
+});
+
+
+test("a visitor's phone keeps the selected grave after inactivity", async ({ page }, testInfo) => {
+  onlyPrimaryViewport(testInfo);
+  await page.clock.install();
+  await mockSearch(page);
+  await page.goto("/kiosk?grave=42", { waitUntil: "domcontentloaded" });
+  await expect(page.getByTestId("kiosk-selection")).toBeVisible();
+  await page.clock.fastForward(120_100);
+  await expect(page.getByTestId("kiosk-selection")).toBeVisible();
+  await expect(page).toHaveURL(/\/kiosk\?grave=42$/);
 });
 
 

@@ -15,8 +15,12 @@ import {
   List,
   RotateCcw,
   Navigation,
+  Compass,
+  Archive,
+  CircleCheck,
 } from "lucide-react";
 import { PublicThemeToggle } from "@/components/ui/PublicThemeToggle";
+import { SearchBar } from "@/components/ui/SearchBar";
 import { SITE_NAME } from "@/lib/config";
 
 const FALLBACK_PHOTO = "/images/memorial_headstone.jpg";
@@ -94,6 +98,9 @@ function SearchPanel({ initialQuery }) {
     router.push(`/search?q=${BROWSE_ALL_QUERY}`);
   };
 
+  // Nothing searched yet (the page shows the "browse" prompt).
+  const showBrowsePrompt = !loading && !results;
+
   // Derive filtered and sorted exact matches directly during render
   const rawExact = results?.exact || [];
   let processedExact = [...rawExact];
@@ -147,11 +154,12 @@ function SearchPanel({ initialQuery }) {
           <span>{SITE_NAME}</span>
         </Link>
         <div className="premium-nav-links">
-          <Link href="/kiosk" className="btn btn-ghost">
-            Map Navigator
+          <Link href="/kiosk" className="btn btn-ghost premium-nav-link" aria-label="Map Navigator">
+            <Compass size={20} aria-hidden="true" />
+            <span className="premium-nav-label">Map Navigator</span>
           </Link>
           <PublicThemeToggle />
-          <Link href="/login" className="btn btn-ghost" style={{ width: '44px', padding: 0 }} aria-label="Admin Login" title="Admin Login">
+          <Link href="/login" className="btn btn-ghost premium-nav-icon" aria-label="Admin Login" title="Admin Login">
             <User size={20} />
           </Link>
         </div>
@@ -169,42 +177,24 @@ function SearchPanel({ initialQuery }) {
             Find deceased records by name, grave identifier, or burial year, or browse the complete registry.
           </p>
 
-          {/* Search Form Shell */}
-          <form onSubmit={handleSearchSubmit} className="search-form-shell" role="search">
-            <div className="search-input-group">
-              <div className="search-input-field-wrapper">
-                <div className="search-field-icon" aria-hidden="true">
-                  <Search size={20} />
-                </div>
-                <input
-                  type="text"
-                  className="search-main-input"
-                  autoComplete="off"
-                  placeholder="Search by deceased name, grave ID, or burial year..."
-                  value={inputVal}
-                  onChange={(e) => setInputVal(e.target.value)}
-                  aria-label="Search records by name, ID, or year"
-                  autoFocus
-                />
-                {inputVal.length > 0 && (
-                  <button
-                    type="button"
-                    className="search-clear-btn"
-                    onClick={handleClear}
-                    aria-label="Clear search text"
-                    title="Clear"
-                  >
-                    <X size={16} />
-                  </button>
-                )}
-              </div>
-              <button type="submit" className="btn btn-primary search-submit-btn" aria-label="Submit search">
-                <Search size={18} aria-hidden="true" />
-                <span>Search</span>
-              </button>
-            </div>
-          </form>
+          <SearchBar
+            className="search-bar-spaced"
+            value={inputVal}
+            onChange={setInputVal}
+            onSubmit={handleSearchSubmit}
+            onClear={handleClear}
+            placeholder="Name, grave ID, or year"
+            ariaLabel="Search records by name, ID, or year"
+            autoFocus
+          />
 
+          {/* Phones: the "Explore the Cemetery Registry" card is hidden, so this
+              link is the way to list every record. */}
+          {showBrowsePrompt && (
+            <button type="button" className="search-browse-link" onClick={handleBrowseAll}>
+              Browse all records <ChevronRight size={16} aria-hidden="true" />
+            </button>
+          )}
         </section>
 
         {/* Results Area */}
@@ -436,7 +426,7 @@ function SearchPanel({ initialQuery }) {
             </div>
           ) : (
             /* Initial Browse Prompt */
-            <div className="search-empty-card">
+            <div className="search-empty-card search-browse-card">
               <h2 className="search-empty-title">Explore the Cemetery Registry</h2>
               <p className="search-empty-desc">
                 Enter a deceased name, grave identifier, or year above to search records, or view the complete catalog.
@@ -599,6 +589,7 @@ function GraveCardList({ grave }) {
   const plotLine = [subsection, plotNumber && `Plot ${plotNumber}`, grave.tier > 1 && `Tier ${grave.tier}`]
     .filter(Boolean)
     .join(" · ");
+  const isArchived = grave.status === "archived";
 
   return (
     <article className="grave-card-list">
@@ -618,13 +609,9 @@ function GraveCardList({ grave }) {
       </div>
 
       <div className="grave-card-list-details">
-        {/* Name on the left, status pinned to the right edge */}
-        <div className="grave-list-title">
-          <h2 className="grave-list-name" title={grave.deceasedName}>
-            {grave.deceasedName}
-          </h2>
-          {grave.status === "archived" && <span className="grave-list-status">Archived</span>}
-        </div>
+        <h2 className="grave-list-name" title={grave.deceasedName}>
+          {grave.deceasedName}
+        </h2>
 
         <p className="grave-list-row grave-list-location" title={sectionName}>
           <MapPin size={13} aria-hidden="true" />
@@ -633,6 +620,12 @@ function GraveCardList({ grave }) {
 
         <p className="grave-list-row" title={plotLine || undefined}>
           <span>{plotLine || "Plot not assigned"}</span>
+        </p>
+
+        {/* Status is a row like the others, so it never competes with the name */}
+        <p className={`grave-list-row grave-list-state grave-list-state-${isArchived ? "archived" : "active"}`}>
+          {isArchived ? <Archive size={13} aria-hidden="true" /> : <CircleCheck size={13} aria-hidden="true" />}
+          <span>Status: {isArchived ? "Archived" : "Active"}</span>
         </p>
 
         {/* Bottom row: burial date on the left, map route on the right */}
