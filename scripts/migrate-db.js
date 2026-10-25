@@ -61,7 +61,7 @@ async function main() {
   await ensureDatabaseExists();
 
   // 2. Deploy Prisma migrations
-  console.log("\n▶ [1/2] Deploying database migrations...");
+  console.log("\n▶ [1/3] Deploying database migrations...");
   const migrateRes = spawnSync(npx, ["prisma", "migrate", "deploy"], {
     stdio: "inherit",
     env: process.env,
@@ -74,7 +74,7 @@ async function main() {
   }
 
   // 3. Generate Prisma Client
-  console.log("\n▶ [2/2] Synchronizing Prisma client...");
+  console.log("\n▶ [2/3] Synchronizing Prisma client...");
   const genRes = spawnSync(npx, ["prisma", "generate"], {
     stdio: "inherit",
     env: process.env,
@@ -88,6 +88,16 @@ async function main() {
     console.warn("  If you see type errors, stop your dev server and restart `npm run dev`.");
   } else {
     console.log("✓ Prisma client synchronized successfully");
+  }
+
+  // 4. Fill the phonetic search index for any records that predate it (idempotent).
+  console.log("\n▶ [3/3] Updating the phonetic search index...");
+  const backfillRes = spawnSync("node", ["scripts/backfill-phonetic.js"], {
+    stdio: "inherit",
+    env: process.env,
+  });
+  if (backfillRes.status !== 0) {
+    console.warn("\n⚠ Phonetic index update failed; run `npm run db:backfill-phonetic` once the database is reachable.");
   }
 
   console.log("\n✅ Database is fully migrated, synchronized, and up to date!");

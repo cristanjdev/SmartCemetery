@@ -10,6 +10,98 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// ─── ENUMERATED VALUES ────────────────────────────────────────
+// Fixed value sets are real MySQL ENUM columns, so the database rejects typos
+// and stores one byte per value instead of a VARCHAR.
+
+enum AccountStatus {
+  active
+  disabled
+}
+
+enum PlotStatus {
+  available
+  occupied
+  reserved
+  maintenance
+}
+
+enum GraveStatus {
+  active
+  archived
+}
+
+enum VerificationStatus {
+  pending
+  verified
+  rejected
+}
+
+enum RequestType {
+  reservation
+  record_update
+  inquiry
+}
+
+enum RequestStatus {
+  pending
+  approved
+  rejected
+}
+
+enum RequestOutcome {
+  approved
+  rejected
+}
+
+enum NotificationCategory {
+  request_outcome
+  broadcast
+}
+
+enum EmailStatus {
+  none
+  sent
+  failed
+  skipped
+}
+
+enum BroadcastAudience {
+  All
+  Admin
+  Staff
+  Client
+}
+
+enum BroadcastStatus {
+  processing
+  sent
+  failed
+  partial
+}
+
+enum NavigationChannel {
+  dashboard
+  kiosk
+  public
+}
+
+enum NavigationOutcome {
+  success
+  failed
+}
+
+enum ArchivalSource {
+  admin
+  cron
+}
+
+enum ArchivalStatus {
+  running
+  success
+  failed
+}
+
 // ─── USER MANAGEMENT ──────────────────────────────────────────
 
 model UserType {
@@ -26,7 +118,7 @@ model User {
   email        String   @unique @db.VarChar(150)
   passwordHash String   @map("password_hash") @db.VarChar(255)
   userTypeId   Int      @map("user_type_id")
-  status       String   @default("active") @db.VarChar(20)
+  status       AccountStatus @default(active)
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
 
@@ -87,7 +179,7 @@ model Plot {
   id               Int      @id @default(autoincrement())
   locationDetailId Int      @map("location_detail_id")
   plotNumber       String   @map("plot_number") @db.VarChar(30)
-  status           String   @default("available") @db.VarChar(20)
+  status           PlotStatus @default(available)
   // Number of burial tiers/niches in this plot (1 for a ground lot, 4 for an
   // apartment crypt stack). Tier occupants are the plot's Grave rows.
   totalTiers       Int      @default(1) @map("total_tiers")
@@ -110,12 +202,16 @@ model Grave {
   plotId             Int       @map("plot_id")
   tier               Int       @default(1)
   deceasedName       String    @map("deceased_name") @db.VarChar(200)
-  birthDate          DateTime? @map("birth_date")
-  deathDate          DateTime? @map("death_date")
-  burialDate         DateTime? @map("burial_date")
-  status             String    @default("active") @db.VarChar(20)
+  // Phonetic index key: space-separated Double Metaphone tokens of the name
+  // (see phoneticIndexKey in src/lib/search.js). Backs the FULLTEXT index that
+  // powers "did you mean" suggestions inside the database.
+  namePhonetic       String    @default("") @map("name_phonetic") @db.VarChar(500)
+  birthDate          DateTime? @map("birth_date") @db.Date
+  deathDate          DateTime? @map("death_date") @db.Date
+  burialDate         DateTime? @map("burial_date") @db.Date
+  status             GraveStatus @default(active)
   archivedAt         DateTime? @map("archived_at")
-  verificationStatus String    @default("pending") @map("verification_status") @db.VarChar(20)
+  verificationStatus VerificationStatus @default(pending) @map("verification_status")
   verifiedAt         DateTime? @map("verified_at")
   verifiedById       Int?      @map("verified_by_id")
   verificationNote   String?   @map("verification_note") @db.VarChar(500)
@@ -129,6 +225,7 @@ model Grave {
   @@unique([plotId, tier])
   @@index([burialDate])
   @@index([status, verificationStatus])
+  @@fulltext([namePhonetic])
   @@map("graves")
 }
 
@@ -185,9 +282,9 @@ model UserLog {
 model Request {
   id          Int      @id @default(autoincrement())
   userId      Int      @map("user_id")
-  type        String   @db.VarChar(50)
+  type        RequestType
   description String   @db.Text
-  status      String   @default("pending") @db.VarChar(20)
+  status      RequestStatus @default(pending)
   referenceId String   @unique @map("reference_id") @db.VarChar(20)
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
@@ -195,6 +292,7 @@ model Request {
   user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
   notifications Notification[]
 
+  @@index([status, createdAt])
   @@map("requests")
 }
 
@@ -204,11 +302,11 @@ model Notification {
   requestId   Int?      @map("request_id")
   broadcastId Int?      @map("broadcast_id")
   referenceId String?   @map("reference_id") @db.VarChar(20)
-  outcome     String?   @db.VarChar(20)
-  category    String    @default("request_outcome") @db.VarChar(30)
+  outcome     RequestOutcome?
+  category    NotificationCategory @default(request_outcome)
   title       String    @default("Notification") @db.VarChar(160)
   message     String?   @db.Text
-  emailStatus String    @default("none") @map("email_status") @db.VarChar(20)
+  emailStatus EmailStatus @default(none) @map("email_status")
   readAt      DateTime? @map("read_at")
   createdAt   DateTime  @default(now()) @map("created_at")
 
@@ -224,10 +322,10 @@ model Notification {
 model Broadcast {
   id        Int       @id @default(autoincrement())
   creatorId Int       @map("creator_id")
-  audience  String    @db.VarChar(20)
+  audience  BroadcastAudience
   title     String    @db.VarChar(160)
   message   String    @db.Text
-  status    String    @default("processing") @db.VarChar(20)
+  status    BroadcastStatus @default(processing)
   createdAt DateTime  @default(now()) @map("created_at")
   sentAt    DateTime? @map("sent_at")
 
@@ -243,7 +341,7 @@ model BroadcastDelivery {
   id          Int      @id @default(autoincrement())
   broadcastId Int      @map("broadcast_id")
   userId      Int      @map("user_id")
-  emailStatus String   @default("none") @map("email_status") @db.VarChar(20)
+  emailStatus EmailStatus @default(none) @map("email_status")
   attempts    Int      @default(0)
   error       String?  @db.VarChar(500)
   createdAt   DateTime @default(now()) @map("created_at")
@@ -275,8 +373,8 @@ model Navigation {
   plotId          Int?     @map("plot_id")
   origin          String?  @db.VarChar(255)
   destination     String   @db.VarChar(255)
-  channel         String   @default("dashboard") @db.VarChar(20)
-  outcome         String   @default("success") @db.VarChar(20)
+  channel         NavigationChannel @default(dashboard)
+  outcome         NavigationOutcome @default(success)
   distanceMeters  Int?     @map("distance_meters")
   durationSeconds Int?     @map("duration_seconds")
   createdAt       DateTime @default(now()) @map("created_at")
@@ -293,8 +391,8 @@ model Navigation {
 model ArchivalRun {
   id            Int       @id @default(autoincrement())
   runKey        String    @unique @map("run_key") @db.VarChar(80)
-  source        String    @db.VarChar(20)
-  status        String    @default("running") @db.VarChar(20)
+  source        ArchivalSource
+  status        ArchivalStatus @default(running)
   archivedCount Int       @default(0) @map("archived_count")
   error         String?   @db.VarChar(500)
   startedAt     DateTime  @default(now()) @map("started_at")

@@ -21,6 +21,7 @@
     "db:setup": "node scripts/setup-db.js",
     "db:rotate-encryption": "node scripts/rotate-encryption.js",
     "db:backfill-tiers": "node scripts/backfill-tiers.js",
+    "db:backfill-phonetic": "node scripts/backfill-phonetic.js",
     "db:inspect": "node scripts/inspect-layout.js",
     "db:cleanup-demo": "node scripts/cleanup-demo-duplicates.js"
   },

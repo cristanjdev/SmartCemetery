@@ -1,4 +1,6 @@
-import { doubleMetaphone } from "double-metaphone";
+import { phoneticIndexKey, phoneticSimilarity } from "./phonetic.mjs";
+
+export { getPhoneticKeys, phoneticSimilarity, phoneticIndexKey } from "./phonetic.mjs";
 
 /**
  * Smart Search Engine
@@ -6,35 +8,8 @@ import { doubleMetaphone } from "double-metaphone";
  * Uses Double Metaphone algorithm for phonetic matching
  */
 
-/**
- * Generate phonetic keys for a name
- */
-export function getPhoneticKeys(name) {
-  const words = name.trim().toLowerCase().split(/\s+/);
-  return words.map((word) => doubleMetaphone(word)).flat();
-}
-
-/**
- * Calculate phonetic similarity score between two names (0-1)
- */
-export function phoneticSimilarity(name1, name2) {
-  const keys1 = getPhoneticKeys(name1);
-  const keys2 = getPhoneticKeys(name2);
-
-  if (keys1.length === 0 || keys2.length === 0) return 0;
-
-  let matches = 0;
-  for (const k1 of keys1) {
-    for (const k2 of keys2) {
-      if (k1 && k2 && k1 === k2) {
-        matches++;
-        break;
-      }
-    }
-  }
-
-  return matches / Math.max(keys1.length, keys2.length);
-}
+// Upper bound on rows the phonetic stage re-scores in JavaScript.
+const PHONETIC_CANDIDATE_LIMIT = 100;
 
 const GRAVE_INCLUDE = {
   plot: {
@@ -156,12 +131,25 @@ export async function smartSearch(prisma, rawQuery) {
   });
   if (exact.length) return result(exact, [], "name");
 
-  // The fallback is deliberately bounded; never load the registry into memory.
-  const candidates = await prisma.grave.findMany({
-    include: GRAVE_INCLUDE,
-    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
-    take: 500,
-  });
+  // The fallback never loads the registry: the FULLTEXT index on
+  // graves.name_phonetic returns only rows that share a Double Metaphone code
+  // with the query, best match first, and only those are re-scored below.
+  const queryKey = phoneticIndexKey(query);
+  const candidateIds = queryKey
+    ? (
+        await prisma.$queryRaw`SELECT id FROM graves
+          WHERE MATCH(name_phonetic) AGAINST (${queryKey} IN BOOLEAN MODE)
+          ORDER BY MATCH(name_phonetic) AGAINST (${queryKey} IN BOOLEAN MODE) DESC
+          LIMIT ${PHONETIC_CANDIDATE_LIMIT}`
+      ).map((row) => Number(row.id))
+    : [];
+  const candidates = candidateIds.length
+    ? await prisma.grave.findMany({
+        where: { id: { in: candidateIds } },
+        include: GRAVE_INCLUDE,
+        take: PHONETIC_CANDIDATE_LIMIT,
+      })
+    : [];
   const suggestions = candidates
     .map((grave) => ({
       ...grave,

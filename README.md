@@ -77,11 +77,22 @@ Environment variables are documented in `.env.example` (database connection, aut
 
 ### 3. Set up the database
 
-One command creates the database, applies migrations, generates the Prisma client, and seeds the user accounts. On a **local** database it also loads sample data and the layout preset; against any other database those are opt-in (`SEED_DEMO_DATA=yes`, `SEED_LAYOUT_PRESET=yes`):
+One command finds your local MySQL/MariaDB (XAMPP, MySQL Server, Docker, ports 3306-3310), creates the database, saves the connection and development secrets to `.env.local`, applies migrations, seeds the user accounts and builds the search index. You do not need to create `.env.local` or the database first; just start MySQL. On a **local** database it also loads sample data and the layout preset; against any other database those are opt-in (`SEED_DEMO_DATA=yes`, `SEED_LAYOUT_PRESET=yes`):
 
 ```bash
 npm run db:setup
 ```
+
+It only asks questions when it has to (for example, when the server rejects the default `root` login with no password). It is safe to run again. Options:
+
+```bash
+npm run db:setup -- --port=3307 --user=root --password=secret --db=cemetery_map
+npm run db:setup -- --url="mysql://user:pass@127.0.0.1:3306/cemetery_map"
+npm run db:setup -- --no-demo   # users only, no sample burial records
+npm run db:setup -- --yes       # never prompt; print a hint instead
+```
+
+Requires MySQL 8.0.16+ or MariaDB 10.2+ (older MySQL works but does not enforce CHECK constraints).
 
 Individual steps are also available:
 
@@ -89,6 +100,7 @@ Individual steps are also available:
 npm run db:migrate      # apply migrations
 npm run db:generate     # generate Prisma client
 npm run db:seed         # seed user accounts (+ demo data / layout preset when enabled)
+npm run db:backfill-phonetic  # (re)build the phonetic search index for existing records
 npm run db:inspect      # read-only summary of locations, rows, plots and tiers
 ```
 
@@ -110,7 +122,8 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 | `npm run lint` | Run ESLint |
 | `npm test` | Run unit and integration tests (Vitest) |
 | `npm run test:e2e` | Run end-to-end tests (Playwright) |
-| `npm run db:setup` | Create DB, migrate, generate client, and seed |
+| `npm run db:setup` | Detect the local DB, create it, save `.env.local`, migrate, seed, build the search index |
+| `npm run db:backfill-phonetic` | Rebuild the phonetic search index (`-- --all` recomputes every row) |
 | `npm run db:inspect` | Read-only summary of the layout in the database |
 | `npm run db:backfill-tiers` | Move legacy tier/photo data into real columns (dry run; add `-- --apply` to write) |
 | `npm run db:cleanup-demo` | Remove duplicate demo sections left by older seed runs (dry run; add `-- --apply` to delete) |

@@ -15,13 +15,14 @@ function grave(id, name, sortOrder = 5, locationDetailId = 50) {
   };
 }
 
-function prismaWith({ findUnique = null, graveFindMany = [], sections = [] } = {}) {
+function prismaWith({ findUnique = null, graveFindMany = [], sections = [], phoneticIds = [] } = {}) {
   return {
     grave: {
       findUnique: vi.fn().mockResolvedValue(findUnique),
       findMany: vi.fn().mockImplementation(() => Promise.resolve(graveFindMany.shift() || [])),
     },
     locationDetail: { findMany: vi.fn().mockResolvedValue(sections) },
+    $queryRaw: vi.fn().mockResolvedValue(phoneticIds.map((id) => ({ id }))),
   };
 }
 
@@ -51,13 +52,24 @@ describe("smartSearch", () => {
     const nearer = grave(20, "Other", 4, 40);
     const prisma = prismaWith({
       graveFindMany: [[], [phonetic], [farther, nearer]],
+      phoneticIds: [10],
       sections: [{ id: 40, sortOrder: 4 }, { id: 60, sortOrder: 6 }],
     });
     const result = await smartSearch(prisma, "Smyth");
     expect(result.matchType).toBe("phonetic");
     expect(result.suggestions[0].id).toBe(10);
     expect(result.nearby.map((item) => item.id)).toEqual([20, 30]);
-    expect(prisma.grave.findMany.mock.calls[1][0].take).toBe(500);
+    // Candidates come from the FULLTEXT phonetic index, never a table scan.
+    expect(prisma.$queryRaw).toHaveBeenCalledTimes(1);
+    expect(prisma.grave.findMany.mock.calls[1][0].where).toEqual({ id: { in: [10] } });
+    expect(prisma.grave.findMany.mock.calls[1][0].take).toBe(100);
     expect(prisma.locationDetail.findMany).toHaveBeenCalledWith(expect.objectContaining({ take: 2 }));
+  });
+
+  it("returns no suggestions without loading rows when the phonetic index has no candidates", async () => {
+    const prisma = prismaWith({ graveFindMany: [[]], phoneticIds: [] });
+    const result = await smartSearch(prisma, "Zzyzx");
+    expect(result.matchType).toBe("none");
+    expect(prisma.grave.findMany).toHaveBeenCalledTimes(1);
   });
 });
