@@ -71,8 +71,8 @@ async function nearbySectionSuggestions(prisma, suggestions) {
 }
 
 /**
- * Search precedence: exact numeric ID, indexed burial-year range, name
- * contains, then a bounded phonetic fallback. Existing `exact` and
+ * Search precedence: exact numeric ID, indexed burial-year range, plot
+ * number, name contains, then a bounded phonetic fallback. Existing `exact` and
  * `suggestions` arrays remain stable; `matchType` identifies the branch and
  * `nearby` contains deterministic adjacent-section recommendations.
  */
@@ -120,6 +120,21 @@ export async function smartSearch(prisma, rawQuery) {
       });
       if (exact.length) return result(exact, [], "burialYear");
     }
+  }
+
+  // A plot number ("FBN-B2-C02-A"): the graves in that plot. Without its face
+  // letter ("FBN-B2-C02") it also finds both faces of that block position, and
+  // a block as the directory writes it ("FBN B2") finds the whole block.
+  const blockQuery = cleanQuery.replace(/^([a-z]{2,4})\s+(b\d+)\b/i, "$1-$2");
+  if (/^[a-z0-9]+(?:-[a-z0-9]+)+$/i.test(blockQuery) && /\d/.test(blockQuery)) {
+    const exactBlock = /^[a-z]{2,4}-b\d+$/i.test(blockQuery);
+    const inPlot = await prisma.grave.findMany({
+      where: { plot: { plotNumber: { startsWith: exactBlock ? `${blockQuery}-` : blockQuery } } },
+      include: GRAVE_INCLUDE,
+      orderBy: [{ plotId: "asc" }, { tier: "asc" }],
+      take: 20,
+    });
+    if (inPlot.length) return result(inPlot, [], "plotNumber");
   }
 
   const searchTerm = cleanQuery || query;

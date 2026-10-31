@@ -56,7 +56,7 @@ Cemetery record-keeping is commonly handled through physical logbooks, aging map
 ### Prerequisites
 
 - Node.js 18+ and npm
-- A running MySQL instance (e.g., XAMPP or Laragon for local development)
+- A running MySQL/MariaDB server. For local development this project uses **XAMPP**: open the XAMPP Control Panel and press **Start** next to **MySQL** (default user `root`, no password, port 3306).
 - A Google Maps API key
 
 ### 1. Install dependencies
@@ -102,7 +102,10 @@ npm run db:generate     # generate Prisma client
 npm run db:seed         # seed user accounts (+ demo data / layout preset when enabled)
 npm run db:backfill-phonetic  # (re)build the phonetic search index for existing records
 npm run db:inspect      # read-only summary of locations, rows, plots and tiers
+npm run db:users        # list the accounts that exist (emails, roles, status; no passwords)
 ```
+
+If the app or `db:setup` reports it cannot reach the database, or sign-in says "Service temporarily unavailable", MySQL is not running: open the XAMPP Control Panel, press **Start** next to **MySQL**, then reload. The terminal running `npm run dev` prints the exact cause.
 
 ### 4. Run the development server
 
@@ -111,6 +114,20 @@ npm run dev
 ```
 
 Open [http://localhost:3000](http://localhost:3000) in your browser.
+
+### Updating an existing installation
+
+After pulling a new version, with MySQL running, run one command:
+
+```bash
+npm run db:migrate
+```
+
+It installs any packages the new version added, applies the database changes, and brings the cemetery layout up to date. Running it again when there is nothing to do is harmless. To see what the layout update would change without changing anything, run `npm run db:upgrade-layout`.
+
+The layout update keeps every burial record. One-sided crypt plots become the front face (`-A`) of their block, the back faces and any new rows are added, and every plot is put in its place on the map. A burial on a plot that does not exist on the ground (e.g. a column past the end of its row) moves, tier kept, to a vacant plot in the same row; the list of moved burials is saved in `backups/` for staff. A backup is taken first: a full `backups/before-layout-upgrade-….sql` (mysqldump; set `MYSQLDUMP_PATH` if it is installed somewhere unusual), or, without mysqldump, a `….json` snapshot of everything the update touches. A saved map boundary that leaves plots outside is replaced by the cemetery's own outline (the old one is kept in `backups/`).
+
+A new, empty database needs none of this: `npm run db:setup` loads the current layout directly.
 
 ## Available Scripts
 
@@ -123,11 +140,15 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 | `npm test` | Run unit and integration tests (Vitest) |
 | `npm run test:e2e` | Run end-to-end tests (Playwright) |
 | `npm run db:setup` | Detect the local DB, create it, save `.env.local`, migrate, seed, build the search index |
+| `npm run db:upgrade-layout` | Preview the cemetery layout update that `db:migrate` applies (add `-- --apply` to apply it on its own) |
 | `npm run db:backfill-phonetic` | Rebuild the phonetic search index (`-- --all` recomputes every row) |
 | `npm run db:inspect` | Read-only summary of the layout in the database |
+| `npm run db:users` | List the accounts that exist (emails, roles, status; never passwords) |
 | `npm run db:backfill-tiers` | Move legacy tier/photo data into real columns (dry run; add `-- --apply` to write) |
 | `npm run db:cleanup-demo` | Remove duplicate demo sections left by older seed runs (dry run; add `-- --apply` to delete) |
 | `npm run db:rotate-encryption` | Rotate the encryption key for sensitive fields |
+
+The test-only settings (`TEST_DATABASE_URL`, `ALLOW_LIVE_MYSQL_TESTS`, `E2E_*`) are in `.env.test.example`. The running app never reads them, so a normal `.env` / `.env.local` should not contain them; the app uses only `DATABASE_URL`.
 
 ## Project Structure
 

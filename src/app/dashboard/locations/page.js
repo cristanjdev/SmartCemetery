@@ -1,5 +1,6 @@
 "use client";
 
+import { blockFullLabel, blockTypeName } from "@/lib/cemetery-layout";
 import { useState, useEffect, useCallback } from "react";
 import { useSession } from "next-auth/react";
 import { MapPin, Map, Navigation, Pencil, Power, PowerOff } from "lucide-react";
@@ -201,7 +202,7 @@ export default function LocationsPage() {
                             display: "inline-flex",
                             alignItems: "center"
                           }}>
-                            <span style={{ fontWeight: 600, color: "var(--text-primary)", marginRight: 4 }}>{d.subsection}</span> 
+                            <span style={{ fontWeight: 600, color: "var(--text-primary)", marginRight: 4 }} title={blockTypeName(d.subsection) || undefined}>{blockFullLabel(d.subsection)}</span> 
                             {d.plots?.length || 0} plots
                           </span>
                         ))}

@@ -7,6 +7,7 @@ import {
   getBoundaryCoords,
   coordsToBoundaryOffsets,
   deriveBoundaryOffsets,
+  splitCellAcross,
 } from "@/lib/map-geometry";
 import { latLngToLocalOffset, localOffsetToLatLng } from "@/lib/building-grid";
 
@@ -23,7 +24,8 @@ const building = (id, lat, lng, extra = {}) => ({
 describe("map-geometry", () => {
   it("maps plot status to a colour with a default", () => {
     expect(getPlotStatusColor("occupied")).not.toBe(getPlotStatusColor("available"));
-    expect(getPlotStatusColor("HOLD")).toBe(getPlotStatusColor("reserved"));
+    expect(getPlotStatusColor("RESERVED")).toBe(getPlotStatusColor("reserved"));
+    expect(new Set(["available", "occupied", "reserved", "maintenance"].map(getPlotStatusColor)).size).toBe(4);
     expect(getPlotStatusColor(undefined)).toBe(getPlotStatusColor("unknown"));
   });
 
@@ -80,6 +82,18 @@ describe("map-geometry", () => {
   });
 
   describe("deriveBoundaryOffsets", () => {
+    it("widens to take in extra points (blocks without plots yet)", () => {
+      const grid = [
+        { id: 1, totalTiers: 4, gpsLat: 8.4657, gpsLng: 124.657 },
+        { id: 2, totalTiers: 4, gpsLat: 8.4658, gpsLng: 124.6571 },
+      ];
+      const span = (offsets) => Math.max(...offsets.map((o) => Math.hypot(o.dx ?? o[0] ?? 0, o.dy ?? o[1] ?? 0)));
+      const plain = deriveBoundaryOffsets(grid, 30, 6);
+      const wider = deriveBoundaryOffsets(grid, 30, 6, [{ lat: 8.4667, lng: 124.6581 }]);
+      expect(span(wider)).toBeGreaterThan(span(plain) + 50);
+      expect(deriveBoundaryOffsets(grid, 30, 6, [{ lat: Number.NaN, lng: 1 }])).toEqual(plain);
+    });
+
     const centre = { lat: 8.4658, lng: 124.657 };
     const grid = [-10, -3, 4, 12].map((dx, i) => {
       const pos = localOffsetToLatLng(dx, (i % 2) * 2, centre.lat, centre.lng, 30);
@@ -119,5 +133,27 @@ describe("map-geometry", () => {
       const noisy = [...grid, { id: 99, totalTiers: 1, gpsLat: 40, gpsLng: 40 }, building(100, 41, 41, { _deleted: true })];
       expect(deriveBoundaryOffsets(noisy, 30, 6)).toEqual(deriveBoundaryOffsets(grid, 30, 6));
     });
+  });
+});
+
+describe("splitCellAcross", () => {
+  const cell = [
+    { lat: 1, lng: 0 },
+    { lat: 1, lng: 4 },
+    { lat: 0, lng: 4 },
+    { lat: 0, lng: 0 },
+  ];
+
+  it("cuts a cell into one full-length strip per tier, tier 1 on the c3-c2 side", () => {
+    const strips = splitCellAcross(cell, 4);
+    expect(strips).toHaveLength(4);
+    expect(strips[0][0]).toEqual({ lat: 0, lng: 0 });
+    expect(strips[0][1]).toEqual({ lat: 0, lng: 4 });
+    expect(strips[0][2].lat).toBeCloseTo(0.25, 9);
+    expect(strips[3][3]).toEqual({ lat: 1, lng: 0 });
+  });
+
+  it("colours a partly filled column as occupied (its vacant tiers are drawn as strips)", () => {
+    expect(getPlotStatusColor("partial")).toBe(getPlotStatusColor("occupied"));
   });
 });

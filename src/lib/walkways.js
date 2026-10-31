@@ -14,6 +14,11 @@
 
 /** Half the roof width of an apartment row, measured from its line of plots. */
 export const BLOCK_HALF_WIDTH_M = 2.2;
+/**
+ * On a back-to-back block each face's plots sit half a face (1.4 m) inside
+ * its wall, so the roof reaches this far past the outermost line of plots.
+ */
+export const FACE_EDGE_M = 1.4;
 /** How far a row's walls reach past its first and last mapped plot. */
 export const BLOCK_END_MARGIN_M = 1.8;
 /** Gap kept between the walking line and a wall. */
@@ -22,6 +27,17 @@ export const WALL_CLEARANCE_M = 0.7;
 export const WALKING_SPEED_MPS = 1.2;
 /** A start this close to the outermost row is already inside the cemetery. */
 export const ON_SITE_MARGIN_M = 30;
+/**
+ * A plot this far off its row's centre line belongs to one face of a
+ * back-to-back row (front "-A" plots sit 1.4 m to one side, back "-B" plots
+ * 1.4 m to the other); its niches open onto that side's aisle only.
+ */
+export const FACE_SIDE_MIN_M = 0.5;
+/**
+ * The cemetery's outer wall may only be crossed this close to where the walk
+ * starts (the entrance by the Admin Office, or the visitor's own spot).
+ */
+export const GATE_M = 10;
 
 const LAT_M = 110574;
 const EPS = 0.05;
@@ -52,15 +68,23 @@ const length = (a) => Math.hypot(a.x, a.y);
  * plots plus the roof and end walls. Rows with fewer than two mapped plots
  * have no direction and are left out.
  *
+ * Buildings and blocks that have no plots in the system (`obstacles`) are
+ * added as solid rectangles too, so a route goes round them instead of
+ * through them; one that overlaps a mapped row is left out (the row wins).
+ *
  * @param {Array<{ key: string, lat: number, lng: number }>} points building plots
- * @returns {{ ref: {lat:number,lng:number} | null, blocks: Array<object>, reach: number }}
+ * @param {Array<{ key: string, center: {lat:number,lng:number}, angleDeg: number, length: number, width: number }>} obstacles
+ *   rectangles; `angleDeg` is the long side's direction, counter-clockwise from east
+ * @param {Array<{lat:number,lng:number}>} boundary the cemetery's outer wall (a polygon):
+ *   a walk stays inside it, crossing only at the gate where it starts
+ * @returns {{ ref: {lat:number,lng:number} | null, blocks: Array<object>, walls: Array<{x:number,y:number}>, reach: number }}
  *   `reach` is how far (metres) the outermost row corner lies from `ref`.
  */
-export function buildWalkwayNetwork(points) {
+export function buildWalkwayNetwork(points, obstacles = [], boundary = []) {
   const valid = (points || []).filter(
     (p) => p && p.key && Number.isFinite(p.lat) && Number.isFinite(p.lng)
   );
-  if (valid.length === 0) return { ref: null, blocks: [], reach: 0 };
+  if (valid.length === 0) return { ref: null, blocks: [], walls: [], reach: 0 };
 
   const ref = {
     lat: valid.reduce((sum, p) => sum + p.lat, 0) / valid.length,
@@ -116,14 +140,39 @@ export function buildWalkwayNetwork(points) {
       u,
       v,
       halfLength: (maxU - minU) / 2 + BLOCK_END_MARGIN_M,
-      halfWidth: (maxV - minV) / 2 + BLOCK_HALF_WIDTH_M,
+      // One line of plots: the roof's half width round it. Two faces: half a face past each.
+      halfWidth: Math.max(BLOCK_HALF_WIDTH_M, (maxV - minV) / 2 + FACE_EDGE_M),
     });
   }
+  // "On site" is measured from the rows only, before the buildings are added.
   const reach = Math.max(
     0,
     ...blocks.flatMap((block) => blockCorners(block, 0).map((corner) => length(corner)))
   );
-  return { ref, blocks, reach };
+
+  const rowCount = blocks.length;
+  for (const o of obstacles || []) {
+    if (!o?.center || !Number.isFinite(o.length) || !Number.isFinite(o.width)) continue;
+    const angle = ((o.angleDeg || 0) * Math.PI) / 180;
+    const u = { x: Math.cos(angle), y: Math.sin(angle) };
+    const block = {
+      key: o.key,
+      center: toLocal(ref, o.center),
+      u,
+      v: { x: -u.y, y: u.x },
+      halfLength: o.length / 2,
+      halfWidth: o.width / 2,
+      obstacle: true,
+    };
+    const overlapsRow = blocks
+      .slice(0, rowCount)
+      .some((row) => blockCorners(block, 0).some((c) => insideBlock(row, c, 0)) || insideBlock(block, row.center, 0));
+    if (!overlapsRow) blocks.push(block);
+  }
+  const walls = (boundary || [])
+    .filter((p) => Number.isFinite(p?.lat) && Number.isFinite(p?.lng))
+    .map((p) => toLocal(ref, p));
+  return { ref, blocks, walls: walls.length >= 3 ? walls : [], reach };
 }
 
 /** True when `point` is in (or right beside) the mapped rows. */
@@ -176,29 +225,61 @@ function segmentHitsBlock(block, a, b, grow) {
 }
 
 /**
- * Where a visitor stands to reach `p`. A plot inside a row is reached from
- * the aisle beside it, so each side of the row is a candidate; a point in
- * the open is reached directly.
+ * True when a→b crosses the outer wall anywhere but at the gate (within
+ * GATE_M of `gate`, where the walk starts).
  */
-function standingPoints(blocks, p) {
+function crossesWall(walls, a, b, gate) {
+  const d = sub(b, a);
+  for (let i = 0; i < walls.length; i += 1) {
+    const p = walls[i];
+    const q = walls[(i + 1) % walls.length];
+    const e = sub(q, p);
+    const den = cross(d, e);
+    if (Math.abs(den) < 1e-9) continue;
+    const ap = sub(p, a);
+    const t = cross(ap, e) / den;
+    const u = cross(ap, d) / den;
+    if (t <= 1e-6 || t >= 1 - 1e-6 || u < 0 || u > 1) continue;
+    const hit = { x: a.x + d.x * t, y: a.y + d.y * t };
+    if (length(sub(hit, gate)) > GATE_M) return true;
+  }
+  return false;
+}
+
+/**
+ * Where a visitor stands to reach `p`. A plot inside a row is reached from
+ * the aisle beside it: with `ownFace`, only its own face's aisle on a
+ * back-to-back row, otherwise either side; a point in the open is reached
+ * directly.
+ */
+function standingPoints(blocks, p, { ownFace = false } = {}) {
   const containing = blocks.filter((block) => insideBlock(block, p, WALL_CLEARANCE_M));
   if (containing.length === 0) return [p];
-  const candidates = [];
-  for (const block of containing) {
-    const d = sub(p, block.center);
-    const along = dot(d, block.u);
-    const out = block.halfWidth + WALL_CLEARANCE_M + EPS;
-    for (const side of [1, -1]) {
-      candidates.push({
-        x: block.center.x + block.u.x * along + block.v.x * out * side,
-        y: block.center.y + block.u.y * along + block.v.y * out * side,
-      });
+  const free = (list) => list.filter((c) => !blocks.some((block) => insideBlock(block, c, WALL_CLEARANCE_M)));
+  const beside = (sidesOf) => {
+    const candidates = [];
+    for (const block of containing) {
+      const d = sub(p, block.center);
+      const along = dot(d, block.u);
+      const off = dot(d, block.v);
+      const out = block.halfWidth + WALL_CLEARANCE_M + EPS;
+      for (const side of sidesOf(off)) {
+        candidates.push({
+          x: block.center.x + block.u.x * along + block.v.x * out * side,
+          y: block.center.y + block.u.y * along + block.v.y * out * side,
+        });
+      }
     }
+    return candidates;
+  };
+  const bothSides = beside(() => [1, -1]);
+  if (ownFace) {
+    // A plot on one face of a back-to-back row is reached from that face's aisle.
+    const faceSide = free(beside((off) => (Math.abs(off) >= FACE_SIDE_MIN_M ? [Math.sign(off)] : [1, -1])));
+    if (faceSide.length) return faceSide;
   }
-  const free = candidates.filter(
-    (c) => !blocks.some((block) => insideBlock(block, c, WALL_CLEARANCE_M))
-  );
-  return free.length ? free : candidates;
+  const open = free(bothSides);
+  return open.length ? open : bothSides;
 }
 
 /**
@@ -210,10 +291,21 @@ function standingPoints(blocks, p) {
  */
 export function findWalkingRoute(network, origin, destination) {
   if (!network?.ref || !network.blocks?.length) return null;
+  // Inside the outer wall when there is one; if that leaves no way through
+  // (e.g. a plot traced right against the wall), round the blocks only.
+  if (network.walls?.length) {
+    const walled = searchWalk(network, origin, destination, network.walls);
+    if (walled) return walled;
+  }
+  return searchWalk(network, origin, destination, []);
+}
+
+function searchWalk(network, origin, destination, walls) {
   const { ref, blocks } = network;
   const plot = toLocal(ref, destination);
-  const starts = standingPoints(blocks, toLocal(ref, origin));
-  const goals = standingPoints(blocks, plot);
+  const gate = toLocal(ref, origin);
+  const starts = standingPoints(blocks, gate);
+  const goals = standingPoints(blocks, plot, { ownFace: true });
 
   // Graph nodes: start(s), goal(s), and every reachable block corner set just
   // outside the walking clearance, so a path can hug a corner without
@@ -229,7 +321,8 @@ export function findWalkingRoute(network, origin, destination) {
   }
 
   const visible = (i, j) =>
-    !blocks.some((block) => segmentHitsBlock(block, nodes[i], nodes[j], WALL_CLEARANCE_M));
+    !blocks.some((block) => segmentHitsBlock(block, nodes[i], nodes[j], WALL_CLEARANCE_M)) &&
+    !(walls.length && crossesWall(walls, nodes[i], nodes[j], gate));
 
   // Dijkstra from all starts at once (the graph is small: ~4 nodes per row).
   const dist = nodes.map((_, i) => (i < starts.length ? 0 : Infinity));

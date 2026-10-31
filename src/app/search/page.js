@@ -154,7 +154,7 @@ function SearchPanel({ initialQuery }) {
           <span>{SITE_NAME}</span>
         </Link>
         <div className="premium-nav-links">
-          <Link href="/kiosk" className="btn btn-ghost premium-nav-link" aria-label="Map Navigator">
+          <Link href="/map" className="btn btn-ghost premium-nav-link" aria-label="Map Navigator">
             <Compass size={20} aria-hidden="true" />
             <span className="premium-nav-label">Map Navigator</span>
           </Link>
@@ -545,7 +545,7 @@ function GraveCard({ grave }) {
         <div className="grave-card-footer">
           {grave.plot?.id ? (
             <Link
-              href={`/kiosk?grave=${encodeURIComponent(grave.id)}`}
+              href={`/map?grave=${encodeURIComponent(grave.id)}`}
               className="btn btn-primary grave-action-btn"
               aria-label={`Open map route to ${grave.deceasedName}`}
             >
@@ -636,7 +636,7 @@ function GraveCardList({ grave }) {
           </p>
           {grave.plot?.id && (
             <Link
-              href={`/kiosk?grave=${encodeURIComponent(grave.id)}`}
+              href={`/map?grave=${encodeURIComponent(grave.id)}`}
               className="btn btn-primary btn-sm grave-action-btn"
               aria-label={`Open map directions to ${grave.deceasedName}`}
             >

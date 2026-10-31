@@ -95,10 +95,8 @@ export function ClientDashboard({ userName }) {
         <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
           <div
             style={{
-              width: 42,
+              width: "auto",
               height: 42,
-              borderRadius: "var(--radius-md)",
-              background: "var(--primary-glow, rgba(59, 130, 246, 0.15))",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",

@@ -10,7 +10,7 @@
     "test": "vitest run",
     "test:e2e": "playwright test",
     "test:e2e:public": "playwright test e2e/public-responsive.pw.spec.js",
-    "test:e2e:kiosk": "playwright test e2e/kiosk-routing.pw.spec.js",
+    "test:e2e:map": "playwright test e2e/map-navigator-routing.pw.spec.js",
     "test:e2e:roles": "playwright test e2e/roles.pw.spec.js",
     "test:mysql": "node scripts/test-mysql.js",
     "test:release": "npm run lint && npm test && npm run build",
@@ -19,15 +19,18 @@
     "db:push": "prisma db push",
     "db:seed": "node prisma/seed.js",
     "db:setup": "node scripts/setup-db.js",
+    "db:upgrade-layout": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/upgrade-layout.js",
     "db:rotate-encryption": "node scripts/rotate-encryption.js",
     "db:backfill-tiers": "node scripts/backfill-tiers.js",
     "db:backfill-phonetic": "node scripts/backfill-phonetic.js",
     "db:inspect": "node scripts/inspect-layout.js",
+    "db:users": "node scripts/list-users.js",
     "db:cleanup-demo": "node scripts/cleanup-demo-duplicates.js"
   },
   "dependencies": {
     "@prisma/client": "^6.9.0",
     "@react-google-maps/api": "2.20.8",
+    "@react-three/fiber": "9.8.2",
     "bcryptjs": "^2.4.3",
     "double-metaphone": "^2.0.1",
     "exceljs": "^4.4.0",
@@ -39,13 +42,15 @@
     "react": "19.2.4",
     "react-dom": "19.2.4",
     "recharts": "^2.15.3",
-    "sonner": "^2.0.3"
+    "sonner": "^2.0.3",
+    "three": "0.186.1"
   },
   "devDependencies": {
     "@playwright/test": "^1.61.1",
     "eslint": "^9",
     "eslint-config-next": "16.2.10",
     "fast-check": "^4.9.0",
+    "jiti": "^2.7.0",
     "prisma": "^6.9.0",
     "vitest": "^4.1.10"
   },

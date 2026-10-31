@@ -64,10 +64,10 @@ jobs:
           DATABASE_URL: ${{ env.TEST_DATABASE_URL }}
         run: npm run db:seed
       - run: npx playwright install --with-deps chromium
-      - name: Public and kiosk journeys
+      - name: Public and map journeys
         env:
           DATABASE_URL: ${{ env.TEST_DATABASE_URL }}
-        run: npm run test:e2e:public && npm run test:e2e:kiosk
+        run: npm run test:e2e:public && npm run test:e2e:map
       - name: Authenticated role journeys
         env:
           DATABASE_URL: ${{ env.TEST_DATABASE_URL }}

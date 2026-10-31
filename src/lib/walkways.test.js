@@ -59,6 +59,52 @@ describe("walkways", () => {
     expect(end.y).toBeGreaterThan(-8);
   });
 
+  it("ends on the plot's own face of a back-to-back row, even when the other aisle is closer", () => {
+    // Row C runs east-west at y = 40: front plots 1.4 m south of its line, back plots 1.4 m north.
+    const faces = buildWalkwayNetwork([...row("C", 40 - 1.4), ...row("C", 40 + 1.4)]);
+    const origin = at(0, 60); // north of the row, beside the back aisle
+    const front = local(findWalkingRoute(faces, origin, at(0, 40 - 1.4)).path.at(-1));
+    expect(front.y).toBeLessThan(40 - 1.4 - 2); // south (front) aisle, walking around the row
+    const back = local(findWalkingRoute(faces, origin, at(0, 40 + 1.4)).path.at(-1));
+    expect(back.y).toBeGreaterThan(40 + 1.4 + 2); // north (back) aisle
+  });
+
+  it("walks round a building that has no plots, and ignores one that overlaps a row", () => {
+    const building = { key: "Admin Building", center: at(0, 30), angleDeg: 0, length: 12, width: 10 };
+    const overlapping = { key: "Old", center: at(0, 0), angleDeg: 0, length: 6, width: 6 };
+    const withBuilding = buildWalkwayNetwork([...row("A", 0)], [building, overlapping]);
+    expect(withBuilding.blocks.map((b) => b.key)).toEqual(["A", "Admin Building"]);
+    // Straight north would cross the building; the walk bends round it.
+    const route = findWalkingRoute(withBuilding, at(0, 50), at(0, 15));
+    const points = [at(0, 50), ...route.path].map(local);
+    for (let i = 1; i < points.length; i += 1) {
+      for (let t = 0; t <= 1; t += 0.02) {
+        const x = points[i - 1].x + (points[i].x - points[i - 1].x) * t;
+        const y = points[i - 1].y + (points[i].y - points[i - 1].y) * t;
+        expect(Math.abs(x) < 6 && Math.abs(y - 30) < 5).toBe(false);
+      }
+    }
+  });
+
+  it("stays inside the outer wall, leaving it only at the gate where the walk starts", () => {
+    // A wall round rows A and B with the gate at the north-east corner; the start is just inside it.
+    const wall = [at(-30, 12), at(30, 12), at(30, -22), at(-30, -22)];
+    const walled = buildWalkwayNetwork([...row("A", 0), ...row("B", -10)], [], wall);
+    expect(walled.walls).toHaveLength(4);
+    const origin = at(26, 8);
+    const route = findWalkingRoute(walled, origin, at(-10, -10));
+    const points = [origin, ...route.path].map(local);
+    for (const p of points) {
+      expect(p.x).toBeGreaterThan(-30.01);
+      expect(p.x).toBeLessThan(30.01);
+      expect(p.y).toBeGreaterThan(-22.01);
+      expect(p.y).toBeLessThan(12.01);
+    }
+    // With no way through inside the wall, it still finds a walk round the blocks.
+    const tight = buildWalkwayNetwork([...row("A", 0)], [], [at(-1, 1), at(1, 1), at(1, -1), at(-1, -1)]);
+    expect(findWalkingRoute(tight, at(0, 30), at(0, 0))).not.toBeNull();
+  });
+
   it("goes straight when nothing is in the way", () => {
     const route = findWalkingRoute(network, at(-40, 0), at(-40, 20));
     expect(route.path).toHaveLength(2);

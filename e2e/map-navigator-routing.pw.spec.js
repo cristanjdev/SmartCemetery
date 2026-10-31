@@ -46,6 +46,14 @@ async function mockSearch(page) {
 const KIOSK_START = { lat: 8.4661065, lng: 124.65747 };
 const ROUTE_BUTTON = /Show route from CMP Admin Office/;
 
+// Once the route is drawn the panel stays as it was: no confirmation line and
+// no step list; screen readers hear a short status instead.
+async function expectRouteOnMapOnly(page) {
+  await expect(page.getByRole("status").filter({ hasText: "The walking route is shown on the map." })).toHaveCount(1);
+  await expect(page.getByText("✓ Route from CMP Admin Office")).toHaveCount(0);
+  await expect(page.getByRole("list", { name: "Step-by-step directions" })).toHaveCount(0);
+}
+
 test("kiosk deep-link selects a grave and routes from the admin office", async ({ page }, testInfo) => {
   onlyPrimaryViewport(testInfo);
   await mockSearch(page);
@@ -62,32 +70,67 @@ test("kiosk deep-link selects a grave and routes from the admin office", async (
     await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(routeResponse) });
   });
 
-  await page.goto("/kiosk?grave=42", { waitUntil: "domcontentloaded" });
+  await page.goto("/map?grave=42", { waitUntil: "domcontentloaded" });
   await expect(page.getByTestId("kiosk-selection")).toContainText("Maria Santos");
-  await page.getByRole("button", { name: ROUTE_BUTTON }).click();
-  await expect(page.getByText("✓ Route from CMP Admin Office")).toBeVisible();
-  await expect(page.getByRole("list", { name: "Step-by-step directions" })).toBeVisible();
+  // Opened from "Map Route": the route is drawn without another click.
+  await expectRouteOnMapOnly(page);
   expect(navigationLogs).toBe(0);
 });
 
-test("kiosk never asks the browser for the visitor's location", async ({ page }, testInfo) => {
+test("says when the visitor is not at the cemetery yet", async ({ page }, testInfo) => {
   onlyPrimaryViewport(testInfo);
   await mockSearch(page);
-  await page.addInitScript(() => {
-    window.__geoCalls = 0;
+  // A phone about 5 km away.
+  await page.addInitScript((here) => {
     Object.defineProperty(navigator, "geolocation", {
       configurable: true,
-      value: { getCurrentPosition: () => { window.__geoCalls += 1; } },
+      value: {
+        getCurrentPosition: () => {},
+        watchPosition: (ok) => {
+          setTimeout(() => ok({ coords: { latitude: here.lat + 0.045, longitude: here.lng, accuracy: 10, heading: null } }), 50);
+          return 1;
+        },
+        clearWatch: () => {},
+      },
     });
-  });
+  }, KIOSK_START);
   await page.route("**/api/routing", (route) =>
     route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(routeResponse) }));
+  await page.goto("/map?grave=42", { waitUntil: "domcontentloaded" });
+  await expectRouteOnMapOnly(page);
+  await expect(page.getByText(/Not at the cemetery yet · \d+(\.\d)? km away/)).toBeVisible();
+});
 
-  await page.goto("/kiosk?grave=42", { waitUntil: "domcontentloaded" });
+test("live GPS moves the walker but never changes where the route starts", async ({ page }, testInfo) => {
+  onlyPrimaryViewport(testInfo);
+  await mockSearch(page);
+  // A phone standing inside the cemetery, a few metres from the admin office.
+  await page.addInitScript((here) => {
+    window.__geo = { current: 0, watches: 0 };
+    Object.defineProperty(navigator, "geolocation", {
+      configurable: true,
+      value: {
+        getCurrentPosition: () => { window.__geo.current += 1; },
+        watchPosition: (ok) => {
+          window.__geo.watches += 1;
+          setTimeout(() => ok({ coords: { latitude: here.lat, longitude: here.lng - 0.0001, accuracy: 6, heading: null } }), 50);
+          return 1;
+        },
+        clearWatch: () => {},
+      },
+    });
+  }, KIOSK_START);
+  await page.route("**/api/routing", (route) => {
+    expect(route.request().postDataJSON().origin).toEqual(KIOSK_START);
+    return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(routeResponse) });
+  });
+
+  await page.goto("/map?grave=42", { waitUntil: "domcontentloaded" });
   await expect(page.getByTestId("kiosk-selection")).toContainText("Maria Santos");
-  await page.getByRole("button", { name: ROUTE_BUTTON }).click();
-  await expect(page.getByText("✓ Route from CMP Admin Office")).toBeVisible();
-  expect(await page.evaluate(() => window.__geoCalls)).toBe(0);
+  // The linked grave's route is drawn on arrival; only then is location watched.
+  await expectRouteOnMapOnly(page);
+  await expect(page.getByText(/On your way|arrived at the plot/)).toBeVisible();
+  expect(await page.evaluate(() => window.__geo)).toEqual({ current: 0, watches: 1 });
 });
 
 test("kiosk can retry after a routing provider failure", async ({ page }, testInfo) => {
@@ -101,40 +144,27 @@ test("kiosk can retry after a routing provider failure", async ({ page }, testIn
       : { status: 200, contentType: "application/json", body: JSON.stringify(routeResponse) });
   });
 
-  await page.goto("/kiosk?grave=42", { waitUntil: "domcontentloaded" });
+  await page.goto("/map?grave=42", { waitUntil: "domcontentloaded" });
   await expect(page.getByTestId("kiosk-selection")).toBeVisible();
-  await page.getByRole("button", { name: ROUTE_BUTTON }).click();
+  // The automatic first attempt fails; the button tries again.
   await expect(page.locator("p[role='alert']")).toContainText("temporarily unavailable");
   await page.getByRole("button", { name: ROUTE_BUTTON }).click();
-  await expect(page.getByText("✓ Route from CMP Admin Office")).toBeVisible();
+  await expectRouteOnMapOnly(page);
   expect(attempts).toBe(2);
 });
 
 
-test("kiosk clears private state after inactivity", async ({ page }, testInfo) => {
+test("the map never clears a visitor's selection on its own", async ({ page }, testInfo) => {
   onlyPrimaryViewport(testInfo);
-  // A kiosk terminal screen; phones skip the reset (next test).
+  // There is no shared kiosk screen, so nothing resets after inactivity, on any screen size.
   await page.setViewportSize({ width: 1280, height: 900 });
   await page.clock.install();
   await mockSearch(page);
-  await page.goto("/kiosk?grave=42", { waitUntil: "domcontentloaded" });
+  await page.goto("/map?grave=42", { waitUntil: "domcontentloaded" });
   await expect(page.getByTestId("kiosk-selection")).toBeVisible();
-  await page.clock.fastForward(120_100);
-  await expect(page.getByTestId("kiosk-selection")).toHaveCount(0);
-  await expect(page.getByLabel("Search records by name, ID, or plot")).toHaveValue("");
-  await expect(page).toHaveURL(/\/kiosk$/);
-});
-
-
-test("a visitor's phone keeps the selected grave after inactivity", async ({ page }, testInfo) => {
-  onlyPrimaryViewport(testInfo);
-  await page.clock.install();
-  await mockSearch(page);
-  await page.goto("/kiosk?grave=42", { waitUntil: "domcontentloaded" });
+  await page.clock.fastForward(300_000);
   await expect(page.getByTestId("kiosk-selection")).toBeVisible();
-  await page.clock.fastForward(120_100);
-  await expect(page.getByTestId("kiosk-selection")).toBeVisible();
-  await expect(page).toHaveURL(/\/kiosk\?grave=42$/);
+  await expect(page).toHaveURL(/\/map\?grave=42$/);
 });
 
 
@@ -151,9 +181,11 @@ test("kiosk blocks routing when a grave has no GPS coordinates", async ({ page }
     routingCalls += 1;
     return route.abort();
   });
-  await page.goto("/kiosk?grave=42", { waitUntil: "domcontentloaded" });
-  // The record still shows, but no directions panel is offered at all.
+  await page.goto("/map?grave=42", { waitUntil: "domcontentloaded" });
+  // The record still shows, with a note instead of a directions panel.
   await expect(page.getByTestId("kiosk-selection")).toBeVisible();
+  await expect(page.getByRole("note")).toContainText("not on the map yet");
+  await expect(page.getByRole("button", { name: ROUTE_BUTTON })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Use my location" })).toHaveCount(0);
   await expect(page.getByText("Directions unavailable — this plot has no GPS coordinates.")).toHaveCount(0);
   expect(routingCalls).toBe(0);

@@ -1,5 +1,6 @@
 "use client";
 
+import { PHOTO_ACCEPT, preparePhoto } from "@/lib/prepare-photo";
 import { useState } from "react";
 import { toast } from "sonner";
 import { X, Check, Camera } from "lucide-react";
@@ -28,13 +29,17 @@ export default function ChangePhotoModal({
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [photoError, setPhotoError] = useState("");
 
-  const handleFileChange = (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    if (file.size > 5 * 1024 * 1024) {
-      setPhotoError("Image size must be less than 5MB");
+  const handleFileChange = async (e) => {
+    const picked = e.target.files?.[0];
+    e.target.value = "";
+    if (!picked) return;
+    // Large phone photos and HEIC are shrunk to a JPEG first.
+    const ready = await preparePhoto(picked);
+    if (!ready.ok) {
+      setPhotoError(ready.error);
       return;
     }
+    const file = ready.file;
     setPhotoError("");
     setPhotoFile(file);
     const reader = new FileReader();
@@ -133,10 +138,8 @@ export default function ChangePhotoModal({
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <div
               style={{
-                width: 32,
+                width: "auto",
                 height: 32,
-                borderRadius: "50%",
-                background: isLight ? "#e0f2fe" : "rgba(56, 189, 248, 0.15)",
                 color: isLight ? "#0284c7" : "#38bdf8",
                 display: "flex",
                 alignItems: "center",
@@ -265,7 +268,7 @@ export default function ChangePhotoModal({
           </label>
           <input
             type="file"
-            accept="image/jpeg,image/png,image/webp,image/gif"
+            accept={PHOTO_ACCEPT}
             onChange={handleFileChange}
             disabled={uploadingPhoto}
             style={{

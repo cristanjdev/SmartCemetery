@@ -39,7 +39,8 @@ describe("layout-preset (shipped data)", () => {
     for (const [key, row] of Object.entries(LAYOUT_PRESET.rows)) {
       const cfg = LAYOUT_ROW_CONFIGS[key];
       expect(cfg, `config for ${key}`).toBeDefined();
-      expect(cfg.numCols).toBe(row.plotCount);
+      // One plot per column per face (two faces on a back-to-back block).
+      expect(cfg.numCols * (cfg.numRows || 1)).toBe(row.plotCount);
       expect(cfg.lengthMeters).toBeGreaterThan(0);
       expect(Number.isFinite(cfg.angleDeg)).toBe(true);
     }

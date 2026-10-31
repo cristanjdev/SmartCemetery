@@ -271,7 +271,7 @@ export function StaffDashboard({ userName }) {
                   {pendingRequests.slice(0, 3).map((req) => (
                     <div key={req.id} className="request-item">
                       <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
-                        <div style={{ width: 34, height: 34, borderRadius: "50%", background: "var(--bg-hover)", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-secondary)" }}>
+                        <div style={{ width: "auto", height: 34, display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-secondary)" }}>
                           <FileText size={16} />
                         </div>
                         <div>

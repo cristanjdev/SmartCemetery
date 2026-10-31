@@ -15,7 +15,8 @@
  *   - saves what it detected to `.env.local` (existing values are never
  *     overwritten) so `npm run dev` works straight away,
  *   - applies every migration,
- *   - seeds users (plus sample data and the layout preset on a local database),
+ *   - seeds users (plus sample data on a local database, and the layout preset
+ *     only when the database has no plots yet; it never reshapes existing plots),
  *   - fills the phonetic search index for existing records.
  *
  * Safe to run again at any time. Options (all optional):
@@ -54,6 +55,8 @@ const args = parseArgs(process.argv.slice(2));
 // Connection flags mean "use exactly this", even when DATABASE_URL is already set.
 const forced = ["url", "host", "port", "user", "password", "db"].some((key) => args[key] !== undefined);
 const hadDatabaseUrl = Boolean(process.env.DATABASE_URL && process.env.DATABASE_URL.trim());
+// True when the person chose the layout preset themselves (env or .env file).
+const layoutPresetChosen = Boolean(process.env.SEED_LAYOUT_PRESET && process.env.SEED_LAYOUT_PRESET.trim());
 const interactive = Boolean(process.stdin.isTTY && process.stdout.isTTY) && !args.flags.has("yes");
 
 // ─── Local-development defaults ──────────────────────────────
@@ -343,10 +346,38 @@ function applyDefaults(isLocalDb) {
   return defaulted;
 }
 
+// Say which database this run used and what is in it, so connecting to the
+// wrong server or port (an empty database where records were expected) is
+// obvious instead of looking like lost data.
+async function reportWhatIsInTheDatabase(url) {
+  const { PrismaClient } = require("@prisma/client");
+  const client = new PrismaClient({ log: [] });
+  try {
+    const [graves, plots] = await Promise.all([client.grave.count(), client.plot.count()]);
+    console.log(`\nUsing: ${maskUrl(url)}`);
+    console.log(`       ${graves} burial record(s), ${plots} plot(s) in this database.`);
+    if (graves === 0) {
+      console.log(
+        "\n⚠ This database has no burial records. If you expected your records here, you are connected to a\n" +
+          "  different MySQL server or database than before. Check the port and name in DATABASE_URL in\n" +
+          "  .env.local (it overrides .env) and in .env, point it at the right one, and restart `npm run dev`.\n" +
+          "  Nothing was deleted: your records are still in the other database."
+      );
+    }
+  } catch {
+    // Informational only; setup has already succeeded.
+  } finally {
+    await client.$disconnect().catch(() => {});
+  }
+}
+
 // ─── Main ────────────────────────────────────────────────────
 
 async function main() {
   console.log("Smart Cemetery — local database setup");
+  const conflict = require("./env-check").databaseUrlConflict();
+  if (conflict) console.warn(`
+${conflict}`);
 
   // The client must exist before we can talk to the database at all.
   run("1/5 Generating the Prisma client", npx, ["prisma", "generate"], {
@@ -401,10 +432,43 @@ async function main() {
   }
 
   run("3/5 Applying migrations", npx, ["prisma", "migrate", "deploy"]);
+
+  // The layout preset moves plots to the template's positions and tier count,
+  // and un-pins or deletes plots the template does not list. That is right for
+  // an empty database and wrong for one that already holds someone's own plots
+  // and records, so setup loads it only into a database with no plots, unless
+  // SEED_LAYOUT_PRESET was set on purpose.
+  if (!layoutPresetChosen && process.env.SEED_LAYOUT_PRESET === "yes") {
+    const { PrismaClient } = require("@prisma/client");
+    const check = new PrismaClient({ log: [] });
+    try {
+      const existingPlots = await check.plot.count();
+      if (existingPlots > 0) {
+        process.env.SEED_LAYOUT_PRESET = "no";
+        console.log(
+          `\nℹ Keeping your ${existingPlots} existing plot(s) exactly as they are: the layout preset is only loaded into an empty database.` +
+            "\n  (To apply it anyway, run with SEED_LAYOUT_PRESET=yes.)"
+        );
+      }
+    } catch (error) {
+      // If plots cannot be counted, do not risk reshaping them.
+      process.env.SEED_LAYOUT_PRESET = "no";
+      console.warn(`⚠ Could not check existing plots (${String(error.message).split("\n").pop()}); skipping the layout preset.`);
+    } finally {
+      await check.$disconnect().catch(() => {});
+    }
+  }
   run("4/5 Seeding baseline data", "node", ["prisma/seed.js"]);
   run("5/5 Building the phonetic search index", "node", ["scripts/backfill-phonetic.js"]);
 
+  // Bring an existing database's cemetery layout up to date (backup first; burials kept).
+  spawnSync("node", ["--disable-warning=MODULE_TYPELESS_PACKAGE_JSON", "scripts/upgrade-layout.js", "--apply"], {
+    stdio: "inherit",
+    env: process.env,
+  });
+
   console.log("\n✅ Database ready.");
+  await reportWhatIsInTheDatabase(found.url);
   console.log("\nLogin accounts (local development):");
   console.log(`  Admin  → ${process.env.SEED_ADMIN_EMAIL}  /  ${process.env.SEED_ADMIN_PASSWORD}`);
   console.log(`  Staff  → ${process.env.SEED_STAFF_EMAIL}  /  ${process.env.SEED_STAFF_PASSWORD}`);

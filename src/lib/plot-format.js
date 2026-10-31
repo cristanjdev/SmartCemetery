@@ -52,11 +52,16 @@ export function formatPlotDate(dateStr) {
 
 const TIER_LABELS = ["Ground Level", "Second Level", "Third Level"];
 
+/** Level name of tier `n` in a stack of `total` ("Ground Level", "Top Level"). */
+export function tierLevelName(n, total) {
+  if (total <= 1) return "Ground Burial Lot";
+  return n === total ? "Top Level" : TIER_LABELS[n - 1] || `Level ${n}`;
+}
+
 /** Display label for tier `n` of a stack with `total` tiers. */
 export function tierLabel(n, total) {
   if (total <= 1) return "Ground Burial Lot";
-  const name = n === total ? "Top Level" : TIER_LABELS[n - 1] || `Level ${n}`;
-  return `Tier ${n} (${name})`;
+  return `Tier ${n} (${tierLevelName(n, total)})`;
 }
 
 /** Number of tiers a plot displays: its column, at least the highest grave tier. */
@@ -89,6 +94,34 @@ export function tierAvailability(plot, ignoreGraveId = null) {
 /** True when at least one tier of the plot has no grave record. */
 export function hasVacantTier(plot) {
   return tierAvailability(plot).some((t) => !t.occupant);
+}
+
+/** How many tiers of a plot hold a grave, out of how many, tier by tier (bottom first). */
+export function tierOccupancy(plot) {
+  const tiers = tierAvailability(plot);
+  return {
+    occupied: tiers.filter((t) => t.occupant).length,
+    total: tiers.length,
+    tiers: tiers.map((t) => Boolean(t.occupant)),
+  };
+}
+
+/**
+ * Status to colour a plot by on the map. A multi-tier column that is only
+ * partly filled is "partial" (its stored status turns "occupied" as soon as
+ * one tier is used), so the map can show it still has room.
+ */
+export function mapPlotStatus(plot) {
+  const status = String(plot?.status || "available").toLowerCase();
+  if (status !== "occupied" && status !== "available") return status;
+  const { occupied, total } = tierOccupancy(plot);
+  return total > 1 && occupied > 0 && occupied < total ? "partial" : status;
+}
+
+/** True when a plot's map status passes the legend filter ("occupied" also keeps partly filled ones). */
+export function matchesStatusFilter(mapStatus, filter) {
+  const f = String(filter || "all").toLowerCase();
+  return f === "all" || mapStatus === f || (f === "occupied" && mapStatus === "partial");
 }
 
 /**
@@ -182,10 +215,9 @@ export function statusMeta(status) {
     case "available":
       return { label: "Available", bg: "#22C55E", text: "#ffffff", border: "#16A34A" };
     case "reserved":
-    case "hold":
-      return { label: "Hold / Reserved", bg: "#38BDF8", text: "#ffffff", border: "#0284C7" };
-    case "sold":
-      return { label: "Sold", bg: "#F59E0B", text: "#ffffff", border: "#D97706" };
+      return { label: "Reserved", bg: "#38BDF8", text: "#ffffff", border: "#0284C7" };
+    case "maintenance":
+      return { label: "Maintenance", bg: "#64748B", text: "#ffffff", border: "#475569" };
     default:
       return { label: "Unavailable", bg: "#64748B", text: "#ffffff", border: "#475569" };
   }

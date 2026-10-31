@@ -9,6 +9,11 @@ import {
   buildingLabel,
   sectionFromPlotNumber,
   buildingPlotNumber,
+  plotSide,
+  buildingSideCount,
+  columnShortLabel,
+  blockFullLabel,
+  blockTypeName,
 } from "@/lib/cemetery-layout";
 
 const plot = (plotNumber, section, totalTiers = 4, extra = {}) => ({
@@ -78,11 +83,48 @@ describe("cemetery-layout", () => {
 
   it("labels keys and round-trips generated plot numbers", () => {
     expect(buildingLabel("ROW-E01")).toBe("Row E01");
+    expect(buildingLabel("FBN-B21")).toBe("FBN B21");
+    expect(blockTypeName("FBN-B21")).toBe("Fresh Body Niche");
+    expect(blockTypeName("SBN B7")).toBe("Special Body Niche");
+    expect(blockTypeName("BBN-B1")).toBe("Baby Niche");
+    expect(blockTypeName("ROW-E01")).toBeNull();
+    expect(blockFullLabel("BBN-B2")).toBe("BBN B2 · Baby Niche");
+    expect(blockFullLabel("A1")).toBe("A1");
     expect(buildingLabel("Crypt Block 2")).toBe("Crypt Block 2");
     expect(buildingLabel(null)).toBe("");
     const n = buildingPlotNumber("ROW-E01", 7);
     expect(n).toBe("ROW-E01-C07");
     expect(sectionFromPlotNumber(n)).toBe("ROW-E01");
     expect(sectionFromPlotNumber("Plot 4")).toBe("Plot 4");
+  });
+});
+
+describe("back-to-back blocks", () => {
+  it("reads the face letter of a plot number", () => {
+    expect(plotSide("ROW-E02-C09-A")).toBe("A");
+    expect(plotSide({ plotNumber: "ROW-E02-C09-b" })).toBe("B");
+    expect(plotSide("ROW-E02-C09")).toBeNull();
+    expect(plotSide("SECTION-A")).toBeNull();
+  });
+
+  it("counts two faces once any plot carries a side letter", () => {
+    expect(buildingSideCount([plot("ROW-E02-C01", "ROW-E02")])).toBe(1);
+    expect(buildingSideCount([plot("ROW-E02-C01-A", "ROW-E02"), plot("ROW-E02-C01-B", "ROW-E02")])).toBe(2);
+  });
+
+  it("orders by column, front before back", () => {
+    const sorted = ["ROW-E02-C02-B", "ROW-E02-C10-A", "ROW-E02-C02-A", "ROW-E02-C01-B"]
+      .map((n) => plot(n, "ROW-E02"))
+      .sort(compareByColumn)
+      .map((p) => p.plotNumber);
+    expect(sorted).toEqual(["ROW-E02-C01-B", "ROW-E02-C02-A", "ROW-E02-C02-B", "ROW-E02-C10-A"]);
+  });
+
+  it("names, labels and sections plots with a face letter", () => {
+    expect(buildingPlotNumber("ROW-E02", 9, "B")).toBe("ROW-E02-C09-B");
+    expect(buildingPlotNumber("ROW-E02", 9)).toBe("ROW-E02-C09");
+    expect(columnShortLabel("ROW-E02-C09-B")).toBe("9B");
+    expect(columnShortLabel("ROW-E02-C09")).toBe("9");
+    expect(sectionFromPlotNumber("ROW-E02-C09-A")).toBe("ROW-E02");
   });
 });

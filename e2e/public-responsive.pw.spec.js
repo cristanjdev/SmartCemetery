@@ -17,7 +17,7 @@ const { test, expect } = require("@playwright/test");
 const PUBLIC_PAGES = [
   { name: "home", path: "/" },
   { name: "search", path: "/search" },
-  { name: "kiosk", path: "/kiosk" },
+  { name: "map", path: "/map" },
 ];
 
 // Minimum touch-target size in CSS pixels (Req 16.2). A 1px tolerance absorbs

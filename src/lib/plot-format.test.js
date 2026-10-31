@@ -10,10 +10,14 @@ import {
   statusMeta,
   getGravePhoto,
   tierLabel,
+  tierLevelName,
   tierAvailability,
   hasVacantTier,
   canAddGrave,
   describeGravePosition,
+  tierOccupancy,
+  mapPlotStatus,
+  matchesStatusFilter,
 } from "./plot-format";
 
 describe("plot-format", () => {
@@ -147,7 +151,8 @@ describe("plot-format", () => {
   it("maps statuses to presentation metadata with a safe default", () => {
     expect(statusMeta("occupied").label).toBe("Occupied");
     expect(statusMeta("available").label).toBe("Available");
-    expect(statusMeta("hold").label).toBe("Hold / Reserved");
+    expect(statusMeta("reserved").label).toBe("Reserved");
+    expect(statusMeta("maintenance").label).toBe("Maintenance");
     expect(statusMeta("something-else").label).toBe("Unavailable");
   });
 
@@ -227,4 +232,70 @@ describe("plot-format", () => {
       expect(canAddGrave({ id: 2, plotNumber: "L-1", status: "available", totalTiers: 1, graves: [] })).toBe(true);
     });
   });
+
+  describe("map status by tier", () => {
+    const column = (tiers, status = "occupied") => ({
+      status,
+      totalTiers: 4,
+      graves: tiers.map((tier, i) => ({ id: i + 1, tier })),
+    });
+
+    it("counts occupied tiers, bottom first", () => {
+      expect(tierOccupancy(column([1, 2]))).toEqual({ occupied: 2, total: 4, tiers: [true, true, false, false] });
+    });
+
+    it("marks a partly filled column as partial, and full or empty ones by their status", () => {
+      expect(mapPlotStatus(column([1, 2]))).toBe("partial");
+      expect(mapPlotStatus(column([1, 2, 3, 4]))).toBe("occupied");
+      expect(mapPlotStatus(column([], "available"))).toBe("available");
+      expect(mapPlotStatus({ status: "occupied", totalTiers: 1, graves: [{ id: 1, tier: 1 }] })).toBe("occupied");
+    });
+
+    it("keeps reserved and maintenance plots as they are", () => {
+      expect(mapPlotStatus(column([1], "reserved"))).toBe("reserved");
+      expect(mapPlotStatus(column([1], "maintenance"))).toBe("maintenance");
+    });
+
+    it("lets the occupied filter include partly filled columns", () => {
+      expect(matchesStatusFilter("partial", "occupied")).toBe(true);
+      expect(matchesStatusFilter("partial", "partial")).toBe(true);
+      expect(matchesStatusFilter("occupied", "partial")).toBe(false);
+      expect(matchesStatusFilter("available", "all")).toBe(true);
+    });
+  });
+
+  describe("tier level names", () => {
+    it("names the levels of a 4-tier stack from the ground up", () => {
+      expect([1, 2, 3, 4].map((n) => tierLevelName(n, 4))).toEqual([
+        "Ground Level",
+        "Second Level",
+        "Third Level",
+        "Top Level",
+      ]);
+      expect(tierLevelName(1, 1)).toBe("Ground Burial Lot");
+      expect(tierLabel(4, 4)).toBe("Tier 4 (Top Level)");
+    });
+  });
 });
+
+describe("status keys on the maps", () => {
+  // The statuses a plot can have (prisma/schema.prisma, enum PlotStatus).
+  const STATUSES = ["available", "occupied", "reserved", "maintenance"];
+  const fs = require("node:fs");
+  const read = (f) => fs.readFileSync(f, "utf8");
+
+  it("lists exactly the plot statuses, so every filter button finds plots", () => {
+    const schema = read("prisma/schema.prisma");
+    const inSchema = /enum PlotStatus \{([^}]*)\}/.exec(schema)[1].trim().split(/\s+/);
+    expect(inSchema.sort()).toEqual([...STATUSES].sort());
+    // Both maps use the shared key (MapStatusKey).
+    const keys = [...read("src/components/map/MapStatusKey.js").matchAll(/\{ key: "([a-z]+)", label: "[^"]+" \}/g)].map((m) => m[1]);
+    expect(keys.sort()).toEqual([...STATUSES].sort());
+    for (const file of ["src/components/CemeteryMap.js", "src/components/map3d/CemeteryMap3D.js"]) {
+      expect(read(file), file).toMatch(/<MapStatusKey/);
+      expect(read(file)).not.toMatch(/"(sold|hold|unavailable)"/);
+    }
+    expect(read("src/components/plot-picker/PlotPickerModal.js")).not.toMatch(/"(sold|hold)"/);
+  });
+});
+

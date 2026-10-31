@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Navigation, LocateFixed, AlertTriangle, Loader2 } from "lucide-react";
 import {
   evaluateNavigationGate,
@@ -52,6 +52,12 @@ export default function NavigationOverlay({
   hideTitle = false,
   flat = false,
   fixedOrigin = null,
+  // false: once the route is drawn, the panel stays as it was (no confirmation
+  // line or step list); the route and the walker on the map are the guide.
+  showDetails = true,
+  // Draw the route from `fixedOrigin` as soon as this mounts (the visitor
+  // already asked for it, e.g. with "Map Route" in the directory).
+  autoStart = false,
 }) {
   const [origin, setOrigin] = useState(null);
   const [steps, setSteps] = useState([]);
@@ -192,10 +198,24 @@ export default function NavigationOverlay({
     });
   }
 
+  const autoStarted = useRef(false);
+  useEffect(() => {
+    if (!autoStart || !fixedOrigin || !destinationValid || autoStarted.current) return undefined;
+    // Marked inside the timer, so a cancelled first run (React's dev double
+    // effect) does not stop the real one.
+    const timer = setTimeout(() => {
+      autoStarted.current = true;
+      routeFromFixedOrigin();
+    }, 0);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoStart, destinationValid]);
+
   if (!destination) return null;
 
   const isBusy = status === "locating" || status === "routing";
   const hasError = status === "error" || status === "denied";
+
 
   return (
     <div style={flat ? { width: "100%" } : {
@@ -272,7 +292,16 @@ export default function NavigationOverlay({
             </p>
           )}
 
-          {origin && status === "ready" && (
+          {!showDetails && status === "ready" && (
+            <span
+              role="status"
+              style={{ position: "absolute", width: 1, height: 1, overflow: "hidden", clip: "rect(0 0 0 0)", whiteSpace: "nowrap" }}
+            >
+              The walking route is shown on the map.
+            </span>
+          )}
+
+          {showDetails && origin && status === "ready" && (
             <div style={{ marginTop: 8 }}>
               <p className="text-sm" style={{ margin: "0 0 6px 0", color: "var(--accent-light, #34d399)", fontWeight: 500 }}>
                 {fixedOrigin
@@ -292,7 +321,7 @@ export default function NavigationOverlay({
             </div>
           )}
 
-          {steps.length > 0 && (
+          {showDetails && steps.length > 0 && (
             <ol
               aria-label="Step-by-step directions"
               style={{

@@ -19,6 +19,69 @@
  *   deployment never has to edit the preset file to attach it to its own site.
  * @returns {Promise<{ location: object, rowCount: number, totalPlots: number }>}
  */
+/**
+ * Renames rows the layout now calls by another name (`preset.renamedRows`,
+ * e.g. "ROW-E05" → "FBN-B2", the printed directory's name): the section and
+ * the start of every plot number in it ("ROW-E05-C03-A" → "FBN-B2-C03-A").
+ * Burials, photos and history stay on their plots. Does nothing for a row
+ * that is already renamed, or when both names exist (reported, not merged).
+ *
+ * @returns {Promise<Array<{ from: string, to: string, plots: number }>>} what was renamed
+ */
+/** AppSetting key holding the fingerprint of the last layout preset applied. */
+export const LAYOUT_APPLIED_KEY = "layout_preset_applied";
+
+/**
+ * A short fingerprint of what a preset lays out (rows, plot numbers,
+ * positions, renames). A database that has had this exact preset applied
+ * keeps any changes made since (blocks moved with the Adjust tool, a pin
+ * relocated) until a different preset ships.
+ */
+export function layoutFingerprint(preset) {
+  const text = JSON.stringify([
+    preset.renamedRows || {},
+    preset.deletedRows || [],
+    preset.tiersPerPlot,
+    Object.entries(preset.rows || {}).map(([k, r]) => [k, r.plots.map((p) => [p.plotNumber, p.lat, p.lng])]),
+  ]);
+  // FNV-1a, 2 × 32 bits (no imports: the CommonJS seed loads this file too).
+  let a = 0x811c9dc5;
+  let b = 0x01000193;
+  for (let i = 0; i < text.length; i += 1) {
+    const c = text.charCodeAt(i);
+    a = Math.imul(a ^ c, 0x01000193) >>> 0;
+    b = Math.imul(b ^ c, 0x811c9dc5) >>> 0;
+  }
+  return a.toString(16).padStart(8, "0") + b.toString(16).padStart(8, "0");
+}
+
+/** The fingerprint of the preset last applied to this database, or null. */
+export async function appliedLayoutFingerprint(client) {
+  const row = await client.appSetting.findUnique({ where: { key: LAYOUT_APPLIED_KEY } }).catch(() => null);
+  return row?.value ?? null;
+}
+
+export async function renameLayoutRows(client, preset, locationId) {
+  const done = [];
+  for (const [from, to] of Object.entries(preset.renamedRows || {})) {
+    const old = await client.locationDetail.findFirst({ where: { locationId, subsection: from }, include: { plots: true } });
+    if (!old) continue;
+    const taken = await client.locationDetail.findFirst({ where: { locationId, subsection: to } });
+    if (taken) {
+      console.warn(`  ⚠ Both "${from}" and "${to}" exist; left as they are.`);
+      continue;
+    }
+    await client.locationDetail.update({ where: { id: old.id }, data: { subsection: to } });
+    for (const plot of old.plots) {
+      if (plot.plotNumber === from || plot.plotNumber.startsWith(`${from}-`)) {
+        await client.plot.update({ where: { id: plot.id }, data: { plotNumber: to + plot.plotNumber.slice(from.length) } });
+      }
+    }
+    done.push({ from, to, plots: old.plots.length });
+  }
+  return done;
+}
+
 export async function applyLayoutPresetToDb(client, preset, tiersOverride, options = {}) {
   const tiers = tiersOverride ?? preset.tiersPerPlot;
   if (!Number.isInteger(tiers) || tiers < 1) {
@@ -53,6 +116,9 @@ export async function applyLayoutPresetToDb(client, preset, tiersOverride, optio
       data: { gpsLat: loc.gpsLat, gpsLng: loc.gpsLng },
     });
   }
+
+  // Rows the layout has renamed keep their plots under the new name.
+  await renameLayoutRows(client, preset, location.id);
 
   // 2. Upsert each row (section) and its plots.
   const activePlotNumbers = new Set();
@@ -118,6 +184,14 @@ export async function applyLayoutPresetToDb(client, preset, tiersOverride, optio
   for (const p of pinned) {
     if (!activePlotNumbers.has(p.plotNumber)) await retire(p);
   }
+
+  // Remember which layout this database now has (see layoutFingerprint).
+  const fingerprint = layoutFingerprint(preset);
+  await client.appSetting.upsert({
+    where: { key: LAYOUT_APPLIED_KEY },
+    update: { value: fingerprint },
+    create: { key: LAYOUT_APPLIED_KEY, value: fingerprint },
+  });
 
   return { location, rowCount: rowKeys.length, totalPlots: activePlotNumbers.size };
 }

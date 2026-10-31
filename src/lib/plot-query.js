@@ -76,3 +76,33 @@ export function exposeGraveDetails(grave, canSeeSensitive) {
 export function exposePlot(plot, canSeeSensitive) {
   return { ...plot, graves: (plot.graves || []).map((g) => exposeGraveDetails(g, canSeeSensitive)) };
 }
+
+/** What the public map may load for every pinned plot: layout and which tiers are taken, no grave records. */
+export const PUBLIC_LAYOUT_SELECT = {
+  id: true,
+  plotNumber: true,
+  status: true,
+  totalTiers: true,
+  gpsLat: true,
+  gpsLng: true,
+  locationDetail: { select: { subsection: true } },
+  graves: { select: { tier: true } },
+};
+
+/**
+ * One plot for the public map: position, status and occupied tier numbers
+ * only. Graves are reduced to `{ tier }`, so the map can colour vacant and
+ * occupied tiers without exposing names or any grave detail.
+ */
+export function publicLayoutPlot(plot) {
+  return {
+    id: plot.id,
+    plotNumber: plot.plotNumber,
+    status: plot.status,
+    totalTiers: plot.totalTiers,
+    gpsLat: plot.gpsLat == null ? null : Number(plot.gpsLat),
+    gpsLng: plot.gpsLng == null ? null : Number(plot.gpsLng),
+    locationDetail: { subsection: plot.locationDetail?.subsection ?? null },
+    graves: (plot.graves || []).map((g) => ({ tier: Number(g.tier) || 1 })),
+  };
+}

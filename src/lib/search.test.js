@@ -35,6 +35,31 @@ describe("smartSearch", () => {
     expect(prisma.grave.findMany).not.toHaveBeenCalled();
   });
 
+  it("finds the graves in a plot by its plot number", async () => {
+    const match = grave(5, "Plot Match");
+    const prisma = prismaWith({ graveFindMany: [[match]] });
+    const result = await smartSearch(prisma, "ROW-W03-C02-A");
+    expect(result).toMatchObject({ exact: [match], matchType: "plotNumber" });
+    const args = prisma.grave.findMany.mock.calls[0][0];
+    expect(args.where).toEqual({ plot: { plotNumber: { startsWith: "ROW-W03-C02-A" } } });
+  });
+
+  it("finds a whole block by its directory name, written with a space", async () => {
+    const match = grave(7, "Block Match");
+    const prisma = prismaWith({ graveFindMany: [[match]] });
+    const result = await smartSearch(prisma, "FBN B2");
+    expect(result).toMatchObject({ exact: [match], matchType: "plotNumber" });
+    // "FBN-B2-", so FBN B20–B24 are not included.
+    expect(prisma.grave.findMany.mock.calls[0][0].where).toEqual({ plot: { plotNumber: { startsWith: "FBN-B2-" } } });
+  });
+
+  it("falls back to name search when no plot has that number", async () => {
+    const match = grave(6, "Name Match");
+    const prisma = prismaWith({ graveFindMany: [[], [match]] });
+    const result = await smartSearch(prisma, "ROW-W99-C01");
+    expect(result.matchType).toBe("name");
+  });
+
   it("uses an indexed half-open date range for a four-digit burial year", async () => {
     const match = grave(2, "Year Match");
     const prisma = prismaWith({ graveFindMany: [[match]] });

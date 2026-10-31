@@ -39,6 +39,7 @@ yarn-error.log*
 # env files (commit the placeholder template only)
 .env*
 !.env.example
+!.env.test.example
 
 # local agent metadata and instructions
 /.kiro/

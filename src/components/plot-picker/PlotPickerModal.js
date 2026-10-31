@@ -10,9 +10,9 @@ import { hasPosition, layoutMiniMap, panView, zoomView } from "@/lib/minimap";
 import { getClientGoogleMapsApiKey } from "@/lib/config";
 import { getPlotStatusColor } from "@/lib/map-geometry";
 
-// The very same map as the Cemetery Map page (satellite imagery, building blocks,
-// plot cells, labels). Loaded on demand because it pulls in Google Maps.
-const CemeteryMap = dynamic(() => import("@/components/CemeteryMap"), {
+// The very same map as the Cemetery Map page (2D satellite or 3D, building
+// blocks, plot cells, labels). Loaded on demand because it pulls in the map libraries.
+const CemeteryMapView = dynamic(() => import("@/components/CemeteryMapView"), {
   ssr: false,
   loading: () => (
     <div style={{ height: "100%", minHeight: 320, display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -24,8 +24,8 @@ const CemeteryMap = dynamic(() => import("@/components/CemeteryMap"), {
 const MAP_LEGEND = [
   ["Available", "available"],
   ["Occupied", "occupied"],
-  ["Hold / Reserved", "reserved"],
-  ["Sold", "sold"],
+  ["Reserved", "reserved"],
+  ["Maintenance", "maintenance"],
 ];
 
 const COLORS = {
@@ -390,7 +390,7 @@ export default function PlotPickerModal({
                 }}
                 id="plot-picker-gmap"
               >
-                <CemeteryMap
+                <CemeteryMapView
                   plots={plots}
                   selectedPlot={chosenPlot}
                   onSelectPlot={handleMapSelect}

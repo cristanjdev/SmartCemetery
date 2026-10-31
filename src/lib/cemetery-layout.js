@@ -8,7 +8,10 @@
  *  - `Plot.totalTiers > 1` marks a plot as part of a building;
  *  - its building is its section, `plot.locationDetail.subsection`
  *    (new, not-yet-saved plots carry `_buildingKey` instead);
- *  - column order is the trailing number of the plot number.
+ *  - column order is the column number of the plot number;
+ *  - a back-to-back block has two faces: its plots end in a side letter,
+ *    "-A" for the front and "-B" for the back ("ROW-E02-C09-A"), and each
+ *    face holds its own stack of tiers.
  *
  * Every layout tool (map, adjuster, grid generator, batch save) uses these
  * helpers so they cannot disagree about what belongs to a building.
@@ -36,18 +39,36 @@ export function belongsToBuilding(plot, key) {
   return Boolean(key) && key !== "custom" && getBuildingKey(plot) === key;
 }
 
-function columnNumber(plot) {
-  const m = /(\d+)\s*$/.exec(plot?.plotNumber || "");
+/** The two faces of a back-to-back block, front first. */
+export const PLOT_SIDES = ["A", "B"];
+
+/** Face of a back-to-back block plot ("A" front, "B" back), or null for a one-sided plot. */
+export function plotSide(plotOrNumber) {
+  const number = typeof plotOrNumber === "string" ? plotOrNumber : plotOrNumber?.plotNumber;
+  const m = /\d-([AB])\s*$/i.exec(number || "");
+  return m ? m[1].toUpperCase() : null;
+}
+
+/** 2 when any of the plots belongs to a back-to-back block face, else 1. */
+export function buildingSideCount(plots) {
+  return (plots || []).some((p) => plotSide(p)) ? 2 : 1;
+}
+
+/** Column number of a building plot ("ROW-E02-C09-B" → 9), or 0 when it has none. */
+export function columnNumber(plot) {
+  const m = /(\d+)(?:-[AB])?\s*$/i.exec(plot?.plotNumber || "");
   return m ? parseInt(m[1], 10) : 0;
 }
 
 /**
- * Left-to-right column order: by trailing number, then by plot number. A plot
- * with no column number sorts first.
+ * Left-to-right column order: by column number, then front before back, then
+ * by plot number. A plot with no column number sorts first.
  */
 export function compareByColumn(a, b) {
   const diff = columnNumber(a) - columnNumber(b);
   if (diff !== 0) return diff;
+  const sides = String(plotSide(a) || "").localeCompare(String(plotSide(b) || ""));
+  if (sides !== 0) return sides;
   return String(a?.plotNumber || "").localeCompare(String(b?.plotNumber || ""), undefined, {
     numeric: true,
   });
@@ -71,31 +92,65 @@ export function plotsOfBuilding(plots, key) {
     .sort(compareByColumn);
 }
 
-/** Human label for a building key ("ROW-E01" → "Row E01"; other keys as-is). */
+/**
+ * What the letters at the start of a block's name mean, as on the printed
+ * directory's legend ("FBN B2" is a fresh body niche block).
+ */
+export const BLOCK_TYPES = [
+  { code: "FBN", name: "Fresh Body Niche" },
+  { code: "SBN", name: "Special Body Niche" },
+  { code: "BBN", name: "Baby Niche" },
+  { code: "CB", name: "Columbarium" },
+  { code: "UN", name: "Urn Niche" },
+];
+
+/** "Fresh Body Niche" for "FBN-B2" / "FBN B2"; null when the name has no type code. */
+export function blockTypeName(key) {
+  const m = /^([a-z]{2,4})[-\s]/i.exec(String(key ?? ""));
+  return BLOCK_TYPES.find((t) => t.code === m?.[1]?.toUpperCase())?.name ?? null;
+}
+
+/** "FBN B2 · Fresh Body Niche" (the block's label, with its type when it has one). */
+export function blockFullLabel(key) {
+  const type = blockTypeName(key);
+  return type ? `${buildingLabel(key)} · ${type}` : buildingLabel(key);
+}
+
+/**
+ * Human label for a building key: "ROW-E01" → "Row E01", a directory block
+ * "FBN-B21" → "FBN B21" (as the printed directory names it); others as-is.
+ */
 export function buildingLabel(key) {
-  return String(key ?? "").replace(/^ROW-/i, "Row ");
+  return String(key ?? "")
+    .replace(/^ROW-/i, "Row ")
+    .replace(/^([A-Z]{2,4})-(B\d+)$/i, "$1 $2");
 }
 
 /**
  * Section name for a generated plot number: the number without its `-C<nn>`
- * column suffix. Inverse of the naming the grid generator uses, so the client
- * and server agree when a new plot arrives without an explicit section.
+ * column suffix (and side letter). Inverse of the naming the grid generator
+ * uses, so the client and server agree when a new plot arrives without an
+ * explicit section.
  */
 export function sectionFromPlotNumber(plotNumber) {
-  return String(plotNumber || "").replace(/-C\d+$/i, "");
-}
-
-/** Plot-number for column `n` of building `key` (what the grid generator creates). */
-export function buildingPlotNumber(key, n) {
-  return `${key}-C${String(n).padStart(2, "0")}`;
+  return String(plotNumber || "").replace(/-C\d+(?:-[AB])?$/i, "");
 }
 
 /**
- * Short label for a building cell: its column number without leading zeros
- * ("ROW-E01-C05" → "5", "WALAG-001" → "1"); plot numbers with no trailing
+ * Plot-number for column `n` of building `key` (what the grid generator
+ * creates), with the face letter for a back-to-back block ("ROW-E02-C09-B").
+ */
+export function buildingPlotNumber(key, n, side = null) {
+  return `${key}-C${String(n).padStart(2, "0")}${side ? `-${side}` : ""}`;
+}
+
+/**
+ * Short label for a building cell: its column number without leading zeros,
+ * plus the face letter on a back-to-back block ("ROW-E01-C05" → "5",
+ * "ROW-E01-C05-B" → "5B", "WALAG-001" → "1"); plot numbers with no trailing
  * number are returned unchanged.
  */
 export function columnShortLabel(plotNumber) {
-  const m = /(\d+)\s*$/.exec(plotNumber || "");
-  return m ? String(parseInt(m[1], 10)) : String(plotNumber ?? "");
+  const m = /(\d+)(?:-([AB]))?\s*$/i.exec(plotNumber || "");
+  return m ? `${parseInt(m[1], 10)}${m[2] ? m[2].toUpperCase() : ""}` : String(plotNumber ?? "");
 }

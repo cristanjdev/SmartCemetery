@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
@@ -16,35 +16,58 @@ import {
   X,
 } from "lucide-react";
 import NavigationOverlay from "@/components/NavigationOverlay";
+import { useLiveLocation } from "@/components/useLiveLocation";
+import { formatDistance } from "@/lib/live-location";
+import MapLoading from "@/components/map/MapLoading";
 import { hasValidCoordinates } from "@/lib/navigation";
 import { PublicThemeToggle } from "@/components/ui/PublicThemeToggle";
 import { SearchBar } from "@/components/ui/SearchBar";
 import { KIOSK_START_POINT, SITE_NAME } from "@/lib/config";
+import { tierLevelName, tierOccupancy } from "@/lib/plot-format";
+import { buildingLabel, columnNumber, plotSide } from "@/lib/cemetery-layout";
 
-const CemeteryMap = dynamic(() => import("@/components/CemeteryMap"), {
+const CemeteryMapView = dynamic(() => import("@/components/CemeteryMapView"), {
   ssr: false,
-  loading: () => <div className="spinner spinner-lg" aria-label="Loading cemetery map" />,
+  loading: () => <MapLoading />,
 });
 
-const FALLBACK_PHOTO = "/images/memorial_headstone.jpg";
-
-function inactivityMilliseconds() {
-  const configured = Number(process.env.NEXT_PUBLIC_KIOSK_INACTIVITY_SECONDS);
-  const seconds =
-    Number.isFinite(configured) && configured >= 10 && configured <= 3600
-      ? configured
-      : 120;
-  return seconds * 1000;
+// While a route is shown, the map header says where the visitor is: the
+// text, a tone for the dot, and a longer explanation on hover.
+function routeStatus(live) {
+  switch (live.status) {
+    case "arrived":
+      return { tone: "done", text: "You've arrived at the plot", hint: "You are at the plot." };
+    case "live":
+      return {
+        tone: "live",
+        text: Number.isFinite(live.toPlotM) ? `On your way · ${formatDistance(live.toPlotM)} to go` : "On your way",
+        hint: "Your position updates as you walk.",
+      };
+    case "away":
+      return {
+        tone: "wait",
+        text: Number.isFinite(live.awayM)
+          ? `Not at the cemetery yet · ${formatDistance(live.awayM)} away`
+          : "Not at the cemetery yet",
+        hint: "Your position will show once you reach the cemetery. Until then, You're here marks the start point.",
+      };
+    case "inaccurate":
+      return { tone: "wait", text: "Weak GPS signal", hint: "Waiting for a more precise location; You're here marks the start point." };
+    case "denied":
+      return { tone: "off", text: "Location is off", hint: "Allow location access to follow your walk. You're here marks the start point." };
+    case "unsupported":
+      return { tone: "off", text: "Location not available", hint: "This browser cannot share its location." };
+    default:
+      return { tone: "wait", text: "Finding your location…", hint: "Waiting for your phone's location." };
+  }
 }
+
+const FALLBACK_PHOTO = "/images/memorial_headstone.jpg";
 
 // The kiosk map shows no status legend, so only the map-type control
 // (top-left) needs clearance.
 const KIOSK_ROUTE_FIT_PADDING = { top: 90, right: 60, bottom: 60, left: 60 };
 
-// The inactivity reset clears a shared kiosk screen for the next visitor. On
-// a visitor's own phone (portrait or landscape) it would wipe the route while
-// they walk, so phones skip it.
-const PERSONAL_DEVICE_QUERY = "(max-width: 767px), (max-height: 500px)";
 // Below this width the map sits above the details, out of view once the
 // visitor scrolls down to the directions.
 const STACKED_LAYOUT_QUERY = "(max-width: 900px)";
@@ -69,7 +92,7 @@ function uniqueResults(results) {
   );
 }
 
-function KioskPanel({ initialGrave }) {
+function MapNavigatorPanel({ initialGrave }) {
   const router = useRouter();
   // Opened for one grave (e.g. "Map route" from the directory): show a
   // full-screen map without the search header, plus a Back button.
@@ -79,42 +102,19 @@ function KioskPanel({ initialGrave }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [selectedGrave, setSelectedGrave] = useState(null);
+  // A plot chosen by tapping the map, with the graves found on it (none for a
+  // vacant plot): shown as a plot card instead of a "no records" search.
+  const [tappedPlot, setTappedPlot] = useState(null);
+  const [tappedGraves, setTappedGraves] = useState([]);
   const [routeCoords, setRouteCoords] = useState(null);
-  const [isScrolled, setIsScrolled] = useState(false);
-
-  useEffect(() => {
-    const handleScroll = () => {
-      setIsScrolled(window.scrollY > 20);
-    };
-    window.addEventListener("scroll", handleScroll, { passive: true });
-    return () => window.removeEventListener("scroll", handleScroll);
-  }, []);
-
-  const resetKiosk = useCallback(() => {
+  const startOver = useCallback(() => {
     setQuery("");
     setResults(null);
     setSelectedGrave(null);
     setRouteCoords(null);
     setError("");
-    window.location.replace("/kiosk");
+    window.location.replace("/map");
   }, []);
-
-  // Inactivity auto-reset
-  useEffect(() => {
-    if (window.matchMedia(PERSONAL_DEVICE_QUERY).matches) return undefined;
-    let timer;
-    const restart = () => {
-      clearTimeout(timer);
-      timer = setTimeout(resetKiosk, inactivityMilliseconds());
-    };
-    const events = ["pointerdown", "keydown", "touchstart"];
-    events.forEach((event) => window.addEventListener(event, restart, { passive: true }));
-    restart();
-    return () => {
-      clearTimeout(timer);
-      events.forEach((event) => window.removeEventListener(event, restart));
-    };
-  }, [resetKiosk]);
 
   // Load initial grave if provided via URL param
   useEffect(() => {
@@ -152,27 +152,51 @@ function KioskPanel({ initialGrave }) {
 
   const allResults = useMemo(() => uniqueResults(results), [results]);
   // Before any search: the side panel only holds the "Ready to Navigate" hint.
-  const showIdlePanel = !selectedGrave && allResults.length === 0 && (loading || !results);
+  const showIdlePanel = !selectedGrave && !tappedPlot && allResults.length === 0 && (loading || !results);
 
-  const plots = useMemo(
-    () =>
-      allResults
-        .filter((grave) => grave.plot)
-        .map((grave) => ({
-          ...grave.plot,
-          status: grave.plot.status || "occupied",
-          graves: [grave],
-        }))
-        .filter((plot, index, rows) => rows.findIndex((item) => item.id === plot.id) === index),
-    [allResults]
-  );
+  // Every pinned plot's layout and occupied tiers (no names), so the map can
+  // draw the whole cemetery with vacant and occupied tiers.
+  const [layoutPlots, setLayoutPlots] = useState([]);
+  useEffect(() => {
+    let active = true;
+    fetch("/api/plots/layout")
+      .then((response) => (response.ok ? response.json() : { plots: [] }))
+      .then((data) => {
+        if (active && Array.isArray(data.plots)) setLayoutPlots(data.plots);
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, []);
 
-  const selectedPlot = selectedGrave?.plot || null;
+  const plots = useMemo(() => {
+    const byId = new Map(layoutPlots.map((plot) => [plot.id, plot]));
+    for (const grave of allResults) {
+      if (!grave.plot) continue;
+      const base = byId.get(grave.plot.id);
+      // A search result carries its own grave in full; the layout keeps the plot's other tiers.
+      const others = (base?.graves || []).filter((g) => Number(g.tier) !== Number(grave.tier));
+      byId.set(grave.plot.id, {
+        ...base,
+        ...grave.plot,
+        status: grave.plot.status || base?.status || "occupied",
+        graves: [...others, grave],
+      });
+    }
+    return [...byId.values()];
+  }, [layoutPlots, allResults]);
+
+  const selectedPlot = selectedGrave?.plot || tappedPlot || null;
   const destination = selectedPlot
     ? hasGps(selectedPlot)
       ? { lat: Number(selectedPlot.gpsLat), lng: Number(selectedPlot.gpsLng) }
       : { lat: Number.NaN, lng: Number.NaN }
     : null;
+
+  // While a route is on the map, the visitor's own GPS moves the walker —
+  // once they are at the cemetery — and tells when they reach the plot.
+  const live = useLiveLocation(Boolean(routeCoords), destination);
 
   const selectedPlacement = [
     selectedPlot?.locationDetail?.subsection,
@@ -182,19 +206,28 @@ function KioskPanel({ initialGrave }) {
     .filter(Boolean)
     .join(" · ");
 
+  // The tapped plot's tiers, and which face of its block it is.
+  const tappedOccupancy = tappedPlot ? tierOccupancy(tappedPlot) : { occupied: 0, total: 0, tiers: [] };
+  const tappedSide = plotSide(tappedPlot);
+
   const otherResults = useMemo(() => {
     if (!selectedGrave) return [];
     return allResults.filter((g) => g.id !== selectedGrave.id);
   }, [allResults, selectedGrave]);
 
-  const handleSearch = async (event) => {
+  const handleSearch = (event) => {
     if (event) event.preventDefault();
-    const trimmed = String(query || "").trim();
+    return runSearch(query);
+  };
+
+  const runSearch = async (term) => {
+    const trimmed = String(term || "").trim();
     if (!trimmed) return;
     setLoading(true);
     setError("");
     setRouteCoords(null);
     setSelectedGrave(null);
+    setTappedPlot(null);
     try {
       const response = await fetch(`/api/graves?q=${encodeURIComponent(trimmed)}`);
       const data = await response.json().catch(() => ({}));
@@ -217,15 +250,41 @@ function KioskPanel({ initialGrave }) {
     setQuery("");
     setResults(null);
     setSelectedGrave(null);
+    setTappedPlot(null);
     setRouteCoords(null);
     setError("");
   };
 
   const selectGrave = (grave) => {
     setSelectedGrave(grave);
+    setTappedPlot(null);
     setRouteCoords(null);
     if (grave?.deceasedName) {
       setQuery(grave.deceasedName);
+    }
+  };
+
+  // Tapping a plot on the map shows that plot. Who rests there (if anyone) is
+  // looked up by its plot number; a vacant plot simply shows its free tiers.
+  const latestTap = useRef(null);
+  const selectPlot = async (plot) => {
+    const full = plots.find((p) => p.id === plot.id) || plot;
+    latestTap.current = full;
+    setSelectedGrave(null);
+    setRouteCoords(null);
+    setError("");
+    setTappedPlot(full);
+    setTappedGraves([]);
+    if (!full?.plotNumber || tierOccupancy(full).occupied === 0) return;
+    try {
+      const response = await fetch(`/api/graves?q=${encodeURIComponent(full.plotNumber)}`);
+      const data = await response.json().catch(() => ({}));
+      // Ignore a lookup that comes back after the visitor tapped another plot.
+      if (!response.ok || latestTap.current !== full) return;
+      const here = uniqueResults(data).filter((g) => g.plot?.id === full.id);
+      setTappedGraves(here.sort((a, b) => (a.tier || 1) - (b.tier || 1)));
+    } catch {
+      // The plot card still shows its tiers without names.
     }
   };
 
@@ -239,6 +298,26 @@ function KioskPanel({ initialGrave }) {
         ?.scrollIntoView({ behavior: "smooth", block: "start" });
     }
   }, []);
+
+  const walk = routeCoords ? routeStatus(live) : null;
+  const mapStatus = walk ? (
+    <span className={`kiosk-map-walk is-${walk.tone}`} title={walk.hint} role="status" aria-live="polite">
+      <span className="kiosk-map-walk-dot" aria-hidden="true" />
+      <span className="kiosk-map-walk-text">{walk.text}</span>
+    </span>
+  ) : (
+    <span className="kiosk-map-eyebrow">
+      <span className="kiosk-map-dot" aria-hidden="true" />
+      {selectedPlot ? "Now viewing" : "Live map"}
+    </span>
+  );
+
+  // Clears the chosen grave or plot (and its route); the map stays where it is.
+  const clearSelection = () => {
+    setSelectedGrave(null);
+    setTappedPlot(null);
+    setRouteCoords(null);
+  };
 
   const goBack = () => {
     let sameOriginReferrer = false;
@@ -271,7 +350,9 @@ function KioskPanel({ initialGrave }) {
       <div className="premium-bg-mesh" aria-hidden="true" />
 
       {/* Top Public Navigation */}
-      <nav className={`premium-nav kiosk-nav ${isScrolled ? "scrolled" : ""}`}>
+      {/* Always the solid "scrolled" bar: on big screens this page fits the
+          screen and never scrolls, so the bar would otherwise never show. */}
+      <nav className="premium-nav kiosk-nav scrolled">
         <Link href="/" className="premium-brand" aria-label={`${SITE_NAME} Home`}>
           <span>{SITE_NAME}</span>
         </Link>
@@ -284,9 +365,9 @@ function KioskPanel({ initialGrave }) {
           <button
             type="button"
             className="btn btn-ghost premium-nav-link"
-            onClick={resetKiosk}
-            title="Reset Kiosk"
-            aria-label="Reset Kiosk"
+            onClick={startOver}
+            title="Start over"
+            aria-label="Start over"
           >
             <RotateCcw size={20} aria-hidden="true" />
             <span className="premium-nav-label">Reset</span>
@@ -300,10 +381,12 @@ function KioskPanel({ initialGrave }) {
         {/* Header with Search (hidden when opened for a single grave) */}
         {!focusMode && (
         <header className="kiosk-header">
-          <h1 className="kiosk-title">Interactive Map &amp; Walking Route</h1>
-          <p className="kiosk-subtitle">
-            Search for a burial record to highlight the grave plot on the map and receive walking directions.
-          </p>
+          <div className="kiosk-header-text">
+            <h1 className="kiosk-title">Interactive Map &amp; Walking Route</h1>
+            <p className="kiosk-subtitle">
+              Search for a burial record to highlight the grave plot on the map and receive walking directions.
+            </p>
+          </div>
 
           <SearchBar
             className="search-bar-spaced"
@@ -339,6 +422,17 @@ function KioskPanel({ initialGrave }) {
               <div className="kiosk-selected-card" data-testid="kiosk-selection">
                 {/* Landscape Memorial Photo */}
                 <div className="kiosk-card-media">
+                  {!focusMode && (
+                    <button
+                      type="button"
+                      className="kiosk-card-clear"
+                      onClick={clearSelection}
+                      aria-label="Clear selection"
+                      title="Clear selection"
+                    >
+                      <X size={16} aria-hidden="true" />
+                    </button>
+                  )}
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
                     src={selectedPhoto}
@@ -384,7 +478,13 @@ function KioskPanel({ initialGrave }) {
                   </div>
 
                   {/* Directions & Walking Navigation Panel — only for plots that
-                      have GPS coordinates; others simply show no directions. */}
+                      have GPS coordinates; others say why there is no route. */}
+                  {!hasValidCoordinates(destination) && (
+                    <p className="kiosk-card-note" role="note">
+                      This plot is not on the map yet, so walking directions are not available. Please ask at
+                      the CMP Admin Office.
+                    </p>
+                  )}
                   {hasValidCoordinates(destination) && (
                     <div className="kiosk-navigation-panel">
                       <NavigationOverlay
@@ -395,6 +495,10 @@ function KioskPanel({ initialGrave }) {
                         channel="kiosk"
                         fixedOrigin={KIOSK_START_POINT}
                         flat={true}
+                        hideTitle
+                        showDetails={false}
+                        // Opened from "Map Route": the route is drawn straight away.
+                        autoStart={focusMode && String(selectedGrave.id) === String(initialGrave)}
                       />
                     </div>
                   )}
@@ -426,6 +530,130 @@ function KioskPanel({ initialGrave }) {
                       ))}
                     </div>
                   </div>
+                )}
+              </div>
+            ) : tappedPlot ? (
+              /* A plot tapped on the map (vacant or not): its facts, niche stack and directions */
+              <div className="kiosk-selected-card" data-testid="map-plot-selection">
+                <header className="plot-card-head">
+                  <h2 className="plot-card-title">{tappedPlot.plotNumber}</h2>
+                  {!focusMode && (
+                    <button
+                      type="button"
+                      className="plot-card-clear"
+                      onClick={clearSelection}
+                      aria-label="Clear selection"
+                      title="Clear selection"
+                    >
+                      <X size={15} aria-hidden="true" />
+                      <span>Clear</span>
+                    </button>
+                  )}
+                </header>
+
+                <dl className="plot-card-facts">
+                  {tappedPlot.locationDetail?.subsection && (
+                    <div className="plot-card-fact">
+                      <dt>Block</dt>
+                      <dd>{buildingLabel(tappedPlot.locationDetail.subsection).replace(/^Row\s+/i, "")}</dd>
+                    </div>
+                  )}
+                  {tappedSide && (
+                    <div className="plot-card-fact">
+                      <dt>Side</dt>
+                      <dd>{tappedSide === "A" ? "Front" : "Back"}</dd>
+                    </div>
+                  )}
+                  {columnNumber(tappedPlot) > 0 && (
+                    <div className="plot-card-fact">
+                      <dt>Column</dt>
+                      <dd>{columnNumber(tappedPlot)}</dd>
+                    </div>
+                  )}
+                </dl>
+
+                {tappedOccupancy.total > 0 && (
+                  <section className="plot-card-section plot-card-section-niches" aria-label="Niches in this plot">
+                    <h3 className="plot-card-section-title">
+                      <span>Niches</span>
+                      <span className="plot-card-count">
+                        {tappedOccupancy.occupied === 0
+                          ? "All vacant"
+                          : tappedOccupancy.occupied === tappedOccupancy.total
+                          ? "All occupied"
+                          : `${tappedOccupancy.occupied} of ${tappedOccupancy.total} occupied`}
+                      </span>
+                    </h3>
+
+                    {tappedOccupancy.total > 1 && (
+                      <div className="plot-card-meter" aria-hidden="true">
+                        {[...tappedOccupancy.tiers].reverse().map((occupied, i) => (
+                          <span key={i} className={`plot-card-meter-seg${occupied ? " is-occupied" : ""}`} />
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Top tier first, as the niches stand on site */}
+                    <ul className="plot-card-tiers">
+                      {tappedOccupancy.tiers
+                        .map((occupied, i) => ({ tier: i + 1, occupied }))
+                        .reverse()
+                        .map(({ tier, occupied }) => {
+                          const grave = tappedGraves.find((g) => Number(g.tier) === tier);
+                          const body = (
+                            <>
+                              <span className="plot-card-tier-swatch" aria-hidden="true" />
+                              <span className="plot-card-tier-name">
+                                <span className="plot-card-tier-label">
+                                  {tappedOccupancy.total > 1 ? `Tier ${tier}` : "Burial lot"}
+                                </span>
+                                {tappedOccupancy.total > 1 && (
+                                  <span className="plot-card-tier-level">
+                                    {tierLevelName(tier, tappedOccupancy.total)}
+                                  </span>
+                                )}
+                              </span>
+                              <span className="plot-card-tier-state">
+                                {grave ? grave.deceasedName : occupied ? "Occupied" : "Vacant"}
+                                {grave && <ChevronRight size={16} aria-hidden="true" />}
+                              </span>
+                            </>
+                          );
+                          return (
+                            <li key={tier} className={`plot-card-tier ${occupied ? "is-occupied" : "is-vacant"}`}>
+                              {grave ? (
+                                <button
+                                  type="button"
+                                  className="plot-card-tier-row"
+                                  onClick={() => selectGrave(grave)}
+                                  aria-label={`Tier ${tier}, ${grave.deceasedName}. Open this record.`}
+                                >
+                                  {body}
+                                </button>
+                              ) : (
+                                <div className="plot-card-tier-row">{body}</div>
+                              )}
+                            </li>
+                          );
+                        })}
+                    </ul>
+                  </section>
+                )}
+
+                {hasValidCoordinates(destination) && (
+                  <section className="plot-card-section plot-card-section-directions" aria-label="Directions">
+                    <NavigationOverlay
+                      key={`plot-${tappedPlot.id}`}
+                      destination={destination}
+                      onRouteChange={showRoute}
+                      plotId={tappedPlot.id}
+                      channel="kiosk"
+                      fixedOrigin={KIOSK_START_POINT}
+                      hideTitle
+                      flat
+                      showDetails={false}
+                    />
+                  </section>
                 )}
               </div>
             ) : allResults.length > 0 ? (
@@ -506,44 +734,36 @@ function KioskPanel({ initialGrave }) {
                       <span className="kiosk-map-back-label">Back</span>
                     </button>
                   )}
-                  <span className="kiosk-map-eyebrow">
-                    <span className="kiosk-map-dot" aria-hidden="true" />
-                    {selectedPlot ? "Now viewing" : "Live map"}
-                  </span>
+                  {!focusMode && mapStatus}
                 </div>
                 <div className="kiosk-map-header-end">
-                  <span className={`kiosk-map-title${selectedPlot ? "" : " kiosk-map-title-generic"}`}>
-                    {selectedPlot ? `Plot ${selectedPlot.plotNumber}` : "Interactive Cemetery Map"}
-                  </span>
-                  {selectedGrave && !focusMode && (
-                    <button
-                      type="button"
-                      className="kiosk-map-recenter-btn"
-                      onClick={() => {
-                        setSelectedGrave(null);
-                        setRouteCoords(null);
-                      }}
-                      title="Clear selection"
-                    >
-                      Clear Selection
-                    </button>
-                  )}
+                  {/* Opened for one grave: Back on the left, the status on the right. */}
+                  {focusMode && mapStatus}
+                  {!selectedPlot && <span className="kiosk-map-title kiosk-map-title-generic">Interactive Cemetery Map</span>}
                 </div>
               </div>
 
               {/* Map Viewport */}
               <div className="kiosk-map-viewport">
-                <CemeteryMap
+                <CemeteryMapView
                   plots={plots}
                   selectedPlot={selectedPlot}
                   onSelectPlot={(plot) => {
-                    const grave = allResults.find((item) => item.plot?.id === plot.id);
-                    if (grave) selectGrave(grave);
+                    const grave = allResults.find((item) => item.plot?.id != null && item.plot.id === plot.id);
+                    if (grave) {
+                      selectGrave(grave);
+                    } else if (plot?.id != null) {
+                      // Any other plot, vacant or not: show the plot itself.
+                      void selectPlot(plot);
+                    }
                   }}
                   routeCoords={routeCoords}
                   routeFitPadding={KIOSK_ROUTE_FIT_PADDING}
                   focusPoint={hasGps(selectedPlot) ? destination : null}
                   showLegend={false}
+                  showStatus
+                  showYouAreHere
+                  userPosition={live.position}
                 />
               </div>
             </div>
@@ -554,14 +774,14 @@ function KioskPanel({ initialGrave }) {
   );
 }
 
-function KioskPageContent() {
+function MapNavigatorContent() {
   const searchParams = useSearchParams();
   const initialGrave = searchParams.get("grave") || "";
 
-  return <KioskPanel key={initialGrave} initialGrave={initialGrave} />;
+  return <MapNavigatorPanel key={initialGrave} initialGrave={initialGrave} />;
 }
 
-export default function KioskPage() {
+export default function MapNavigatorPage() {
   return (
     <Suspense
       fallback={
@@ -569,11 +789,11 @@ export default function KioskPage() {
           className="public-page-wrapper"
           style={{ minHeight: "100vh", display: "grid", placeItems: "center" }}
         >
-          <div className="spinner spinner-lg" aria-label="Loading kiosk navigation" />
+          <div className="spinner spinner-lg" aria-label="Loading the map navigator" />
         </div>
       }
     >
-      <KioskPageContent />
+      <MapNavigatorContent />
     </Suspense>
   );
 }

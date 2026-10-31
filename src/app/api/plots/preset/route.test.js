@@ -22,6 +22,9 @@ vi.mock("@/lib/db", () => ({
     grave: {
       create: vi.fn(),
     },
+    appSetting: {
+      upsert: vi.fn(),
+    },
   },
 }));
 

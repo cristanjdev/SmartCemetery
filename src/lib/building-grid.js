@@ -14,9 +14,13 @@ import {
 } from "./config";
 import {
   DEFAULT_BUILDING_PREFIX,
+  PLOT_SIDES,
   belongsToBuilding,
   buildingPlotNumber,
+  buildingSideCount,
+  columnNumber,
   getBuildingKey,
+  plotSide,
   sectionFromPlotNumber,
 } from "./cemetery-layout";
 
@@ -135,6 +139,15 @@ export function getSubdividedBuildingCells({
   const cells = [];
   let plotIndex = 0;
 
+  // A back-to-back block: row 0 is the front face (A), row 1 the back face (B).
+  // Plots are matched to columns by their column number, so a missing face
+  // plot leaves its own cell empty instead of shifting its neighbours.
+  const sided = rows === 2 && targetPlots.some((p) => plotSide(p));
+  const columns = sided ? [...new Set(targetPlots.map(columnNumber))].sort((a, b) => a - b) : [];
+  while (sided && columns.length < cols) columns.push((columns[columns.length - 1] || 0) + 1);
+  const facePlot = (r, c) =>
+    targetPlots.find((p) => plotSide(p) === PLOT_SIDES[r] && columnNumber(p) === columns[c]) || null;
+
   for (let r = 0; r < rows; r++) {
     const yMin = -widthMeters / 2 + r * rowHeight;
     const yMax = yMin + rowHeight;
@@ -156,14 +169,29 @@ export function getSubdividedBuildingCells({
         localOffsetToLatLng(xMin, yMin, centerLat, centerLng, angleDeg),
       ];
 
-      let mappedPlot = targetPlots[plotIndex] || null;
+      let mappedPlot = (sided ? facePlot(r, c) : targetPlots[plotIndex]) || null;
       plotIndex++;
 
       const colNumber = c + 1;
       let label = "";
+      const sidedNumber =
+        sided && rowPrefix && rowPrefix !== "custom" ? buildingPlotNumber(rowPrefix, columns[c], PLOT_SIDES[r]) : null;
 
       if (mappedPlot) {
         label = mappedPlot.plotNumber;
+      } else if (sidedNumber && !usedNumbers.has(sidedNumber)) {
+        // A missing face plot takes its column's number and face letter.
+        usedNumbers.add(sidedNumber);
+        mappedPlot = {
+          isNew: true,
+          plotNumber: sidedNumber,
+          locationDetailId,
+          totalTiers: DEFAULT_BUILDING_TIERS,
+          _buildingKey: rowPrefix,
+          status: "available",
+          graves: [],
+        };
+        label = sidedNumber;
       } else {
         // Generate the smallest unused column number for this row so gaps in
         // the existing numbering are filled instead of duplicated.
@@ -270,7 +298,13 @@ export function snapBuildingToPlots(targetPlots, defaultAngle = DEFAULT_GRID_ANG
 
   const spanDx = maxDx - minDx;
   const lengthMeters = Math.max(5.0, Number((spanDx + 2.65).toFixed(1)));
-  const widthMeters = DEFAULT_BUILDING_WIDTH_M;
+  // A back-to-back block is two faces wide, with one plot per face per column.
+  const sides = buildingSideCount(valid);
+  const widthMeters = DEFAULT_BUILDING_WIDTH_M * sides;
+  const numCols =
+    sides === 2
+      ? new Set(valid.map((p) => String(p.plotNumber || "").replace(/-[AB]\s*$/i, ""))).size
+      : valid.length;
 
   return {
     centerLat: Number(centerLat.toFixed(8)),
@@ -278,8 +312,8 @@ export function snapBuildingToPlots(targetPlots, defaultAngle = DEFAULT_GRID_ANG
     lengthMeters,
     widthMeters,
     angleDeg: detectedAngle,
-    numCols: valid.length,
-    numRows: 1,
+    numCols,
+    numRows: sides,
   };
 }
 

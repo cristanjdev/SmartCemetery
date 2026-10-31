@@ -4,6 +4,31 @@ import bcrypt from "bcryptjs";
 import { getClientIp, writeAuditLog } from "@/lib/audit";
 import { boundedRateLimit, clearRateLimit, consumeRateLimit } from "@/lib/rate-limit";
 
+// The form shows one generic message for every rejected sign-in, on purpose.
+// While developing, the terminal running `npm run dev` says why (never the
+// password, never in production), so a typo in the email or a missing account
+// is not mistaken for a bug.
+function devHint(reason) {
+  if (process.env.NODE_ENV === "development") console.warn(`[auth] sign-in rejected: ${reason}`);
+}
+
+// A server fault (database down, a migration not applied) shows the visitor a
+// generic message; this puts the real cause in the server log so it can be
+// fixed. Only the error text is logged: no credentials, no account data.
+function logAuthFailure(what, error) {
+  const text = String(error?.message || error);
+  const detail = text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean).pop();
+  let fix = "";
+  if (error?.code === "P1001" || /can't reach database server|ECONNREFUSED/i.test(text)) {
+    fix = "MySQL is not running or not reachable: open the XAMPP Control Panel and press Start next to MySQL, and check DATABASE_URL.";
+  } else if (/doesn't exist|unknown column|1146|1054/i.test(text)) {
+    fix = "A table or column is missing: stop the dev server and run `npm run db:migrate`.";
+  } else if (/access denied|P1000/i.test(text)) {
+    fix = "MySQL refused the login: check the user and password in DATABASE_URL.";
+  }
+  console.error(`[auth] sign-in unavailable: ${what}. ${detail}${fix ? ` — ${fix}` : ""}`);
+}
+
 export const authOptions = {
   providers: [
     CredentialsProvider({
@@ -27,9 +52,10 @@ export const authOptions = {
             limit: loginLimit,
             windowMs: windowSeconds * 1000,
           });
-        } catch {
+        } catch (error) {
           // Authentication fails closed if the shared limiter cannot verify
           // the attempt. Do not reveal whether an account exists.
+          logAuthFailure("the sign-in limiter could not reach its table (rate_limit_buckets)", error);
           throw new Error("Service temporarily unavailable. Please try again later.");
         }
         if (!throttle.allowed) {
@@ -48,9 +74,15 @@ export const authOptions = {
             include: { userType: true },
           });
         } catch (error) {
+          logAuthFailure("the accounts could not be read", error);
           throw new Error("Database connection failed. Please try again later.");
         }
 
+        if (!user) {
+          devHint(`no account with the email "${email}". Run \`npm run db:users\` to list the accounts that exist.`);
+        } else if (user.status !== "active") {
+          devHint(`the account "${email}" is ${user.status}.`);
+        }
         if (!user || user.status !== "active") {
           await writeAuditLog({ userId: user ? user.id : null, action: "auth.login_failed", ipAddress });
           throw new Error("Invalid email or password. Please check your credentials and try again.");
@@ -58,6 +90,7 @@ export const authOptions = {
 
         const isValid = await bcrypt.compare(credentials.password, user.passwordHash);
         if (!isValid) {
+          devHint(`wrong password for "${email}". \`npm run db:setup\` resets the default accounts and prints their passwords.`);
           await writeAuditLog({ userId: user.id, action: "auth.login_failed", ipAddress });
           throw new Error("Invalid email or password. Please check your credentials and try again.");
         }

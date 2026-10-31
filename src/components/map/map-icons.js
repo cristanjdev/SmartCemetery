@@ -291,3 +291,50 @@ export function getRotateHandleIcon() {
     anchor: new window.google.maps.Point(52, 16),
   };
 }
+
+// "You're here" on the 2D map: a walking person in a blue pin, anchored at its tip.
+const WALKER_PIN_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="40" height="50" viewBox="0 0 40 50">
+  <defs>
+    <filter id="walkerShadow" x="-20%" y="-10%" width="140%" height="130%">
+      <feDropShadow dx="0" dy="2" stdDeviation="1.5" flood-color="rgba(0,0,0,0.35)"/>
+    </filter>
+  </defs>
+  <path filter="url(#walkerShadow)" d="M20 48 C20 48 4 30 4 19 A16 16 0 1 1 36 19 C36 30 20 48 20 48 Z" fill="#2563eb" stroke="#ffffff" stroke-width="2.5"/>
+  <g fill="#ffffff" stroke="#ffffff" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="21.5" cy="9.5" r="2.6" stroke="none"/>
+    <path d="M20.5 13.5 L18.5 21.5" stroke-width="3" fill="none"/>
+    <path d="M18.5 21.5 L15 28" stroke-width="2.6" fill="none"/>
+    <path d="M18.5 21.5 L22.5 24.5 L24 29" stroke-width="2.6" fill="none"/>
+    <path d="M20 15.5 L16 18.5" stroke-width="2.4" fill="none"/>
+    <path d="M20.3 15.5 L24.5 18" stroke-width="2.4" fill="none"/>
+  </g>
+</svg>`;
+
+export const WALKER_PIN_ICON = `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(WALKER_PIN_SVG)}`;
+
+/**
+ * Name label for a directory block or building drawn from the site survey,
+ * rotated along it. Blocks use the row badge style; buildings the yellow
+ * sign they have on the 3D map.
+ */
+export function getSiteLabelIcon(name, angleDeg = 0, kind = "block") {
+  if (typeof window === "undefined" || typeof window.google?.maps?.Size !== "function") return undefined;
+  const text = String(name).replace(/[<>&"]/g, "");
+  const width = Math.max(56, Math.round(text.length * 6.6) + 24);
+  const height = 24;
+  const box = Math.ceil(Math.hypot(width, height)) + 4;
+  const sign = kind === "building";
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${box}" height="${box}" viewBox="0 0 ${box} ${box}">
+    <g transform="rotate(${-angleDeg}, ${box / 2}, ${box / 2})">
+      <rect x="${(box - width) / 2}" y="${(box - height) / 2}" width="${width}" height="${height}" rx="${sign ? 5 : 12}"
+        fill="${sign ? "#facc15" : "rgba(15, 23, 42, 0.88)"}" stroke="${sign ? "#713f12" : "#ffffff"}" stroke-width="1.5"/>
+      <text x="${box / 2}" y="${box / 2 + 4}" text-anchor="middle" fill="${sign ? "#1f2937" : "#ffffff"}"
+        font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="11" font-weight="700">${text}</text>
+    </g>
+  </svg>`;
+  return {
+    url: `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`,
+    scaledSize: new window.google.maps.Size(box, box),
+    anchor: new window.google.maps.Point(box / 2, box / 2),
+  };
+}

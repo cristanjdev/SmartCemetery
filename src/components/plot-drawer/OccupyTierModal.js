@@ -105,10 +105,8 @@ export default function OccupyTierModal({ plot, allPlots, currentTier, isLight, 
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <div
               style={{
-                width: 32,
+                width: "auto",
                 height: 32,
-                borderRadius: "50%",
-                background: isLight ? "#dcfce7" : "rgba(34, 197, 94, 0.15)",
                 color: isLight ? "#15803d" : "#86efac",
                 display: "flex",
                 alignItems: "center",

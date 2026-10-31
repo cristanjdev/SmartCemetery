@@ -361,3 +361,60 @@ describe("building-grid utility", () => {
   });
 });
 
+describe("back-to-back blocks", () => {
+  const center = { lat: 8.4659, lng: 124.657 };
+  const angleDeg = 31;
+  // Three columns, each with a front (A, dy -1.4) and a back (B, dy +1.4) plot.
+  const plots = [1, 2, 3].flatMap((c) =>
+    [
+      ["A", -1.4],
+      ["B", 1.4],
+    ].map(([side, dy]) => {
+      const pos = localOffsetToLatLng((c - 2) * 2.65, dy, center.lat, center.lng, angleDeg);
+      return {
+        id: c * 10 + (side === "A" ? 1 : 2),
+        plotNumber: `ROW-E02-C0${c}-${side}`,
+        totalTiers: 4,
+        gpsLat: pos.lat,
+        gpsLng: pos.lng,
+        locationDetail: { subsection: "ROW-E02" },
+      };
+    })
+  );
+
+  it("snaps to a block two faces wide with one column per position", () => {
+    const snapped = snapBuildingToPlots(plots, angleDeg);
+    expect(snapped.numRows).toBe(2);
+    expect(snapped.numCols).toBe(3);
+    expect(snapped.widthMeters).toBeCloseTo(5.6, 6);
+  });
+
+  it("puts front plots in row 0 and back plots in row 1, in column order", () => {
+    const snapped = snapBuildingToPlots(plots, angleDeg);
+    const cells = getSubdividedBuildingCells({ ...snapped, targetPlots: plots, targetRow: "ROW-E02" });
+    expect(cells).toHaveLength(6);
+    expect(cells.filter((c) => c.rowIndex === 0).map((c) => c.label)).toEqual([
+      "ROW-E02-C01-A",
+      "ROW-E02-C02-A",
+      "ROW-E02-C03-A",
+    ]);
+    expect(cells.filter((c) => c.rowIndex === 1).map((c) => c.label)).toEqual([
+      "ROW-E02-C01-B",
+      "ROW-E02-C02-B",
+      "ROW-E02-C03-B",
+    ]);
+    // Each plot's cell lies on its own face (front cells on the -dy side).
+    for (const cell of cells) {
+      const { dy } = latLngToLocalOffset(cell.center.lat, cell.center.lng, snapped.centerLat, snapped.centerLng, snapped.angleDeg);
+      expect(Math.sign(dy)).toBe(cell.rowIndex === 0 ? -1 : 1);
+    }
+  });
+
+  it("names a missing face plot after its column and face", () => {
+    const frontOnly = plots.filter((p) => p.plotNumber !== "ROW-E02-C02-B");
+    const snapped = snapBuildingToPlots(plots, angleDeg);
+    const cells = getSubdividedBuildingCells({ ...snapped, targetPlots: frontOnly, targetRow: "ROW-E02" });
+    expect(cells.map((c) => c.label)).toContain("ROW-E02-C02-B");
+  });
+});
+

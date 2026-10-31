@@ -1,5 +1,6 @@
 "use client";
 
+import { blockFullLabel } from "@/lib/cemetery-layout";
 import { useState, useEffect, useCallback } from "react";
 import { useSession } from "next-auth/react";
 import Link from "next/link";
@@ -412,7 +413,7 @@ export default function PlotsPage() {
                     <optgroup key={loc.id} label={loc.name}>
                       {loc.details?.map((det) => (
                         <option key={det.id} value={det.id}>
-                          {det.subsection} (Capacity: {det.capacity})
+                          {blockFullLabel(det.subsection)} (Capacity: {det.capacity})
                         </option>
                       ))}
                     </optgroup>

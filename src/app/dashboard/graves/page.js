@@ -1,5 +1,7 @@
 "use client";
 
+import { PHOTO_ACCEPT, preparePhoto } from "@/lib/prepare-photo";
+import { blockFullLabel } from "@/lib/cemetery-layout";
 import { useState, useEffect, useCallback, useRef } from "react";
 import { createPortal } from "react-dom";
 import { useSession } from "next-auth/react";
@@ -452,7 +454,7 @@ export default function GravesPage() {
                     <td className="text-sm">
                       {grave.plot?.locationDetail?.location?.name || "—"}
                       {grave.plot?.locationDetail?.subsection &&
-                        ` / ${grave.plot.locationDetail.subsection}`}
+                        ` / ${blockFullLabel(grave.plot.locationDetail.subsection)}`}
                     </td>
                     <td>
                       {grave.burialDate
@@ -823,15 +825,19 @@ export default function GravesPage() {
                             <span>Upload Photo</span>
                             <input
                               type="file"
-                              accept="image/jpeg,image/png,image/webp,image/gif"
+                              accept={PHOTO_ACCEPT}
                               style={{ display: "none" }}
-                              onChange={(e) => {
-                                const file = e.target.files?.[0];
-                                if (!file) return;
-                                if (file.size > 5 * 1024 * 1024) {
-                                  toast.error("Image file exceeds 5MB limit");
+                              onChange={async (e) => {
+                                const picked = e.target.files?.[0];
+                                e.target.value = "";
+                                if (!picked) return;
+                                // Large phone photos and HEIC are shrunk to a JPEG first.
+                                const ready = await preparePhoto(picked);
+                                if (!ready.ok) {
+                                  toast.error(ready.error);
                                   return;
                                 }
+                                const file = ready.file;
                                 setPhotoFile(file);
                                 const reader = new FileReader();
                                 reader.onload = (evt) => {

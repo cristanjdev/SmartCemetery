@@ -15,14 +15,14 @@
  * Matched exactly, or (for non-root paths) as a path-boundary prefix.
  * @type {string[]}
  */
-export const PUBLIC_PATHS = ["/", "/login", "/search", "/kiosk"];
+export const PUBLIC_PATHS = ["/", "/login", "/search", "/map"];
 
 /**
  * Public API prefixes that bypass authentication evaluation (Req 1.4).
  * Matched exactly, or as a path-boundary prefix (e.g. `/api/auth/session`).
  * @type {string[]}
  */
-export const PUBLIC_API_PREFIXES = ["/api/auth", "/api/graves", "/api/routing"];
+export const PUBLIC_API_PREFIXES = ["/api/auth", "/api/graves", "/api/routing", "/api/plots/layout"];
 
 /** Prefix of routes that require an authenticated session. */
 const PROTECTED_PREFIX = "/dashboard";

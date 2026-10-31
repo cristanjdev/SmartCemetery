@@ -1,5 +1,6 @@
 "use client";
 
+import { blockFullLabel, isBuildingPlot } from "@/lib/cemetery-layout";
 import { useState, useMemo, useEffect, useRef } from "react";
 import {
   X,
@@ -29,6 +30,7 @@ import {
 import { toast } from "sonner";
 import Link from "next/link";
 import NavigationOverlay from "./NavigationOverlay";
+import { KIOSK_START_POINT } from "@/lib/config";
 import ChangePhotoModal from "./plot-drawer/ChangePhotoModal";
 import OccupyTierModal from "./plot-drawer/OccupyTierModal";
 import {
@@ -674,7 +676,9 @@ export default function PlotDetailsDrawer({
                     marginBottom: 6,
                   }}
                 >
-                  {plot.locationDetail?.location?.name || "City Memorial Park"} / {plot.plotNumber} / {currentTier?.label || `Grave ${currentTier?.tier}`}
+                  {plot.locationDetail?.location?.name || "City Memorial Park"}
+                  {plot.locationDetail?.subsection ? ` / ${blockFullLabel(plot.locationDetail.subsection)}` : ""} / {plot.plotNumber} /{" "}
+                  {currentTier?.label || `Grave ${currentTier?.tier}`}
                 </div>
 
                 {plot.gpsLat && plot.gpsLng && (
@@ -831,30 +835,6 @@ export default function PlotDetailsDrawer({
               {/* Walking Directions & Actions */}
               {plot.gpsLat && plot.gpsLng && (
                 <div style={{ padding: "0 18px", marginBottom: 14 }}>
-                  <div
-                    style={{
-                      background: isLight ? "#f9fafb" : "rgba(15, 23, 42, 0.65)",
-                      border: isLight ? "1px solid #e5e7eb" : "1px solid rgba(255, 255, 255, 0.08)",
-                      borderRadius: 8,
-                      padding: "10px 12px",
-                    }}
-                  >
-                    <div
-                      style={{
-                        fontSize: "0.72rem",
-                        fontWeight: 700,
-                        color: isLight ? "#0284c7" : "#38bdf8",
-                        textTransform: "uppercase",
-                        letterSpacing: "0.05em",
-                        marginBottom: 8,
-                        display: "flex",
-                        alignItems: "center",
-                        gap: 6,
-                      }}
-                    >
-                      <Navigation size={13} />
-                      <span>Walking Directions to Plot</span>
-                    </div>
                     <NavigationOverlay
                       key={plot.id}
                       destination={{ lat: Number(plot.gpsLat), lng: Number(plot.gpsLng) }}
@@ -862,14 +842,19 @@ export default function PlotDetailsDrawer({
                       plotId={plot.id}
                       channel="dashboard"
                       authenticated={authenticated}
+                      // Staff show a family the way from the office, as visitors
+                      // see it: the route is drawn on the map, no step list.
+                      fixedOrigin={KIOSK_START_POINT}
+                      showDetails={false}
                       hideTitle
                       flat
                     />
-                  </div>
                 </div>
               )}
 
-              {isAdmin && (
+              {/* A single ground lot can be re-pinned; a crypt niche column moves
+                  with its whole block (Adjust tool), so it has no pin of its own. */}
+              {isAdmin && !isBuildingPlot(plot) && (
                 <div style={{ padding: "0 18px", marginBottom: 14 }}>
                   <button
                     type="button"
@@ -1048,8 +1033,6 @@ export default function PlotDetailsDrawer({
                 style={{
                   width: 56,
                   height: 56,
-                  borderRadius: "50%",
-                  background: isLight ? "#e0f2fe" : "rgba(56, 189, 248, 0.12)",
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",

@@ -17,12 +17,15 @@ import {
   SITE_NAME,
   getClientMapCenter,
 } from "../../../lib/config";
-import { plotsOfBuilding } from "@/lib/cemetery-layout";
+import { plotsOfBuilding, blockFullLabel } from "@/lib/cemetery-layout";
 import { deriveBoundaryOffsets } from "@/lib/map-geometry";
+import { siteBoundaryOffsets, siteOverlay } from "@/lib/site-overlay";
 import { useHistoryStack } from "@/lib/use-history-stack";
 import { useBoundarySettings } from "@/lib/use-boundary-settings";
 
-const CemeteryMap = dynamic(() => import("../../../components/CemeteryMap"), {
+// 2D satellite or 3D map, as the viewer chooses; the Admin's layout tools
+// (adjust, edit positions, place a new plot) always use the 2D map.
+const CemeteryMapView = dynamic(() => import("../../../components/CemeteryMapView"), {
   ssr: false,
   loading: () => (
     <div className="card" style={{ height: "100%", minHeight: 500, display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -100,7 +103,12 @@ function MapPageInner() {
 
   // Saved boundary, else a padded rectangle derived from the building plots.
   const effectiveBoundaryOffsets = useMemo(
-    () => boundaryOffsets ?? deriveBoundaryOffsets(plots, gridAngle),
+    // A saved boundary wins; else the cemetery's own outline (the paved yard),
+    // else a rectangle round the rows and the blocks not mapped yet.
+    () =>
+      boundaryOffsets ??
+      siteBoundaryOffsets(plots, gridAngle) ??
+      deriveBoundaryOffsets(plots, gridAngle, 8, siteOverlay({ plots, gridAngle }).blocks.flatMap((b) => b.path)),
     [boundaryOffsets, plots, gridAngle]
   );
   const [editBoundaryLines, setEditBoundaryLines] = useState(false);
@@ -903,6 +911,8 @@ function MapPageInner() {
           onClose={() => {
             setDetailsPlot(null);
             setDrawerCollapsed(true);
+            // The route belongs to the plot shown in the drawer; it goes with it.
+            setRouteCoords(null);
           }}
           onSelectPlot={(plot) => {
             setRouteCoords(null);
@@ -964,11 +974,14 @@ function MapPageInner() {
           onConfirmDeleteRow={setConfirmDeleteRow}
         />
 
-        <CemeteryMap
+        <CemeteryMapView
+          layoutTools={adjustMode || editing || !!pending}
           plots={plots}
           selectedPlot={activeDetailsPlot}
           onSelectPlot={(plot) => {
             if (pending || editing || adjustMode) return;
+            // The 3D map can offer a layout cell that is not a saved plot yet.
+            if (plot && plot.id == null) return;
             setRouteCoords(null);
             setDetailsPlot(plot);
             if (plot) setDrawerCollapsed(false);
@@ -1002,47 +1015,6 @@ function MapPageInner() {
           onUpdateBuildingConfig={setBuildingConfig}
           onApplyBuildingConfig={handleApplyAndSaveBuildingConfig}
         />
-
-        {/* Active Route Indicator */}
-        {routeCoords && routeCoords.length > 1 && (
-          <div
-            style={{
-              position: "absolute",
-              top: "20px",
-              left: "50%",
-              transform: "translateX(-50%)",
-              zIndex: 450,
-              display: "flex",
-              alignItems: "center",
-              gap: "0.75rem",
-              background: "#0f172a",
-              border: "1px solid rgba(59, 130, 246, 0.4)",
-              boxShadow: "0 10px 30px rgba(0,0,0,0.6)",
-              padding: "7px 14px",
-              borderRadius: "var(--radius-full)",
-              animation: "fadeSlideIn 0.2s ease-out"
-            }}
-          >
-            <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#3B82F6" }} />
-            <span style={{ fontSize: "0.825rem", fontWeight: 600, color: "#ffffff", whiteSpace: "nowrap" }}>
-              Active Navigation Route
-            </span>
-            <button
-              className="btn btn-ghost btn-xs"
-              onClick={() => setRouteCoords(null)}
-              style={{
-                padding: "2px 8px",
-                fontSize: "0.75rem",
-                color: "var(--text-muted)",
-                height: "auto",
-                border: "1px solid rgba(255,255,255,0.15)",
-                borderRadius: "var(--radius-sm)"
-              }}
-            >
-              Clear Route
-            </button>
-          </div>
-        )}
 
         {toast && (
           <div style={{ position: "absolute", bottom: 24, left: "50%", transform: "translateX(-50%)", background: "var(--primary)", color: "#ffffff", padding: "0.5rem 1rem", borderRadius: "var(--radius-md)", zIndex: 500, fontSize: "0.85rem", fontWeight: 500, whiteSpace: "nowrap", boxShadow: "0 4px 15px rgba(0,0,0,0.4)" }}>
@@ -1082,7 +1054,7 @@ function MapPageInner() {
                 {locations.map((loc) => (
                   <optgroup key={loc.id} label={loc.name}>
                     {loc.details?.map((det) => (
-                      <option key={det.id} value={det.id}>{det.subsection} (Capacity: {det.capacity})</option>
+                      <option key={det.id} value={det.id}>{blockFullLabel(det.subsection)} (Capacity: {det.capacity})</option>
                     ))}
                   </optgroup>
                 ))}

@@ -7,9 +7,15 @@ import {
   PolylineF,
   PolygonF,
   InfoWindowF,
+  CircleF,
   useJsApiLoader,
 } from "@react-google-maps/api";
-import { ChevronDown, AlertTriangle, Check } from "lucide-react";
+import { AlertTriangle } from "lucide-react";
+import MapModeSwitch from "@/components/map/MapModeSwitch";
+import MapTypeControl from "@/components/map/MapTypeControl";
+import MapLoading from "@/components/map/MapLoading";
+import BlockTypeLegend from "@/components/map/BlockTypeLegend";
+import MapStatusKey from "@/components/map/MapStatusKey";
 import { getClientMapCenter, getClientGoogleMapsApiKey } from "../lib/config";
 import {
   getPlotStatusColor,
@@ -18,6 +24,7 @@ import {
   getBuildingsCenter,
   deriveBoundaryOffsets,
   coordsToBoundaryOffsets,
+  splitCellAcross,
 } from "@/lib/map-geometry";
 import {
   belongsToBuilding,
@@ -27,6 +34,7 @@ import {
   isBuildingPlot,
 } from "@/lib/cemetery-layout";
 import { DEFAULT_GRID_ANGLE_DEG } from "@/lib/config";
+import { siteBoundaryOffsets, siteOverlay } from "@/lib/site-overlay";
 import { installMapsAuthFailureHandler, useMapsAuthFailed } from "@/lib/maps-auth";
 import { MapUnavailable } from "@/components/map/MapUnavailable";
 import {
@@ -36,14 +44,22 @@ import {
   getBuildingRotateHandleIcon,
   getBuildingApplyHandleIcon,
   getBlockTitleBadgeIcon,
+  getSiteLabelIcon,
   BLUE_PIN_ICON,
+  WALKER_PIN_ICON,
   createPlotLabelIcon,
   circleSymbol,
   draftSymbol,
   getMoveAnchorIcon,
   getRotateHandleIcon,
 } from "./map/map-icons";
-import { getPlotOccupantNames, getPlotSummaryNames } from "@/lib/plot-format";
+import {
+  getPlotOccupantNames,
+  getPlotSummaryNames,
+  mapPlotStatus,
+  matchesStatusFilter,
+  tierOccupancy,
+} from "@/lib/plot-format";
 import { getPlotsBoundingBox, translatePlots, rotatePlots, M_TO_LAT } from "@/lib/geo";
 import {
   localOffsetToLatLng,
@@ -120,6 +136,10 @@ function GoogleMapLoadedView({
   fitPlots = false,
   // The status legend doubles as a filter for staff; the kiosk hides it.
   showLegend = true,
+  // Set by CemeteryMapView: shows a "3D" button that switches to the 3D map.
+  onMapModeChange,
+  // The visitor's live GPS position ({ lat, lng, accuracy }); moves "You're here".
+  userPosition = null,
 }) {
   const { lat, lng } = getClientMapCenter();
   const center = useMemo(() => ({ lat, lng }), [lat, lng]);
@@ -145,10 +165,19 @@ function GoogleMapLoadedView({
   const [zoomLevel, setZoomLevel] = useState(20);
   const [hoveredPlot, setHoveredPlot] = useState(null);
   const [mapTypeId, setMapTypeId] = useState("hybrid");
-  const [showMapMenu, setShowMapMenu] = useState(false);
-  const [showSatelliteMenu, setShowSatelliteMenu] = useState(false);
-  const mapMenuRef = useRef(null);
-  const satelliteMenuRef = useRef(null);
+  // On phones the status key starts collapsed to a "Key" button so it does not cover the map.
+  const [isPhone, setIsPhone] = useState(false);
+  const [legendOpen, setLegendOpen] = useState(true);
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 640px)");
+    const apply = () => {
+      setIsPhone(mq.matches);
+      setLegendOpen(!mq.matches);
+    };
+    apply();
+    mq.addEventListener("change", apply);
+    return () => mq.removeEventListener("change", apply);
+  }, []);
   const [activeFilter, setActiveFilter] = useState("all");
 
   const effectiveFilter = statusFilter !== "all" ? statusFilter : activeFilter;
@@ -304,8 +333,9 @@ function GoogleMapLoadedView({
           lengthMeters: snapped.lengthMeters,
           widthMeters: snapped.widthMeters,
           angleDeg: snapped.angleDeg,
-          numCols: rowPlots.length,
-          numRows: 1,
+          // Two rows (front and back faces) for a back-to-back block.
+          numCols: snapped.numCols,
+          numRows: snapped.numRows,
           invertCols: false,
         };
       }
@@ -554,24 +584,6 @@ function GoogleMapLoadedView({
     }
   }, [map, mapTypeId]);
 
-  // Close map/satellite dropdowns on outside click or touch
-  useEffect(() => {
-    function handleClickOutside(e) {
-      if (mapMenuRef.current && !mapMenuRef.current.contains(e.target)) {
-        setShowMapMenu(false);
-      }
-      if (satelliteMenuRef.current && !satelliteMenuRef.current.contains(e.target)) {
-        setShowSatelliteMenu(false);
-      }
-    }
-    document.addEventListener("mousedown", handleClickOutside);
-    document.addEventListener("touchstart", handleClickOutside);
-    return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
-      document.removeEventListener("touchstart", handleClickOutside);
-    };
-  }, []);
-
   // Route polyline
   const routePath = useMemo(
     () =>
@@ -619,13 +631,33 @@ function GoogleMapLoadedView({
     [placingMode, onMapClick]
   );
 
+  // Google's own buttons (zoom, recentre) grow on 2K / 4K screens, like ours.
+  const [controlSize, setControlSize] = useState(undefined);
+  useEffect(() => {
+    const big = window.matchMedia("(min-width: 2400px)");
+    const huge = window.matchMedia("(min-width: 3200px)");
+    const apply = () => setControlSize(huge.matches ? 70 : big.matches ? 50 : undefined);
+    apply();
+    big.addEventListener("change", apply);
+    huge.addEventListener("change", apply);
+    return () => {
+      big.removeEventListener("change", apply);
+      huge.removeEventListener("change", apply);
+    };
+  }, []);
+
+  // The directory blocks with no plots yet and the buildings — the same ones
+  // the 3D map draws — so both maps show the whole park.
+  const site = useMemo(() => siteOverlay({ plots, gridAngle: gridAngle ?? DEFAULT_GRID_ANGLE_DEG }), [plots, gridAngle]);
+
   const options = useMemo(
     () => ({
       ...BASE_OPTIONS,
       mapTypeId,
       draggableCursor: placingMode ? "crosshair" : undefined,
+      ...(controlSize ? { controlSize } : {}),
     }),
-    [placingMode, mapTypeId]
+    [placingMode, mapTypeId, controlSize]
   );
 
   // Centre of the building plots (the configured map centre when there are none).
@@ -637,8 +669,13 @@ function GoogleMapLoadedView({
   // Saved boundary offsets, else a padded rectangle derived from the buildings.
   const effectiveBoundaryOffsets = useMemo(() => {
     if (Array.isArray(boundaryOffsets) && boundaryOffsets.length >= 3) return boundaryOffsets;
-    return deriveBoundaryOffsets(plots, gridAngle ?? DEFAULT_GRID_ANGLE_DEG);
-  }, [boundaryOffsets, plots, gridAngle]);
+    // Unsaved: the cemetery's own outline (the paved yard, as on the 3D map);
+    // without one, a rectangle round the rows and the blocks not mapped yet.
+    return (
+      siteBoundaryOffsets(plots, gridAngle ?? DEFAULT_GRID_ANGLE_DEG) ??
+      deriveBoundaryOffsets(plots, gridAngle ?? DEFAULT_GRID_ANGLE_DEG, 8, site.blocks.flatMap((b) => b.path))
+    );
+  }, [boundaryOffsets, plots, gridAngle, site.blocks]);
 
   // Boundary coordinates that move & rotate in lockstep with the plots
   const boundaryPaths = useMemo(
@@ -745,8 +782,7 @@ function GoogleMapLoadedView({
     return plots.filter((p) => {
       if (p._deleted) return false;
       if (!p.gpsLat || !p.gpsLng) return false;
-      if (effectiveFilter === "all") return true;
-      return p.status?.toLowerCase() === effectiveFilter.toLowerCase();
+      return matchesStatusFilter(mapPlotStatus(p), effectiveFilter);
     });
   }, [plots, effectiveFilter]);
 
@@ -768,411 +804,45 @@ function GoogleMapLoadedView({
   }
 
   if (!isLoaded) {
-    return <div className="spinner spinner-lg" aria-label="Loading cemetery map" />;
+    return <MapLoading />;
   }
 
-  const isMapActive = mapTypeId === "roadmap" || mapTypeId === "terrain";
-  const isSatelliteActive = mapTypeId === "hybrid" || mapTypeId === "satellite";
 
   return (
     <div style={WRAPPER_STYLE}>
-      {/* ─── Top-Left Controls: Map / Satellite dropdowns ─── */}
-      <div
-        style={{
-          position: "absolute",
-          top: 16,
-          left: 16,
-          zIndex: 20,
-          display: "flex",
-          gap: 4,
-          background: "rgba(15, 23, 42, 0.85)",
-          backdropFilter: "blur(12px)",
-          WebkitBackdropFilter: "blur(12px)",
-          borderRadius: "var(--radius-md, 8px)",
-          border: "1px solid rgba(255, 255, 255, 0.12)",
-          boxShadow: "0 4px 20px rgba(0, 0, 0, 0.4)",
-          padding: "4px",
-        }}
-      >
-        {/* Map Type Dropdown */}
-        <div
-          ref={mapMenuRef}
-          style={{ position: "relative", width: 95 }}
-          onMouseEnter={() => setShowMapMenu(true)}
-          onMouseLeave={() => setShowMapMenu(false)}
-        >
-          <button
-            type="button"
-            onClick={() => {
-              if (!isMapActive) {
-                setMapTypeId("roadmap");
-              }
-              setShowMapMenu((prev) => !prev);
-              setShowSatelliteMenu(false);
-            }}
-            style={{
-              width: "100%",
-              padding: "6px 10px",
-              background: isMapActive ? "rgba(255, 255, 255, 0.16)" : "transparent",
-              color: isMapActive ? "#ffffff" : "#94a3b8",
-              border: "none",
-              borderRadius: "var(--radius-sm, 6px)",
-              cursor: "pointer",
-              fontWeight: 600,
-              fontSize: "0.82rem",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              transition: "all 0.15s ease",
-            }}
-          >
-            <span>Map</span>
-            <ChevronDown
-              size={12}
-              style={{
-                transform: showMapMenu ? "rotate(180deg)" : "rotate(0deg)",
-                transition: "transform 0.2s ease",
-                opacity: 0.8,
-              }}
-            />
-          </button>
-
-          {showMapMenu && (
-            <div
-              onClick={(e) => e.stopPropagation()}
-              style={{
-                position: "absolute",
-                top: "100%",
-                left: 0,
-                paddingTop: 6,
-                zIndex: 30,
-                minWidth: 125,
-              }}
-            >
-              <div
-                style={{
-                  background: "rgba(15, 23, 42, 0.95)",
-                  backdropFilter: "blur(12px)",
-                  WebkitBackdropFilter: "blur(12px)",
-                  border: "1px solid rgba(255, 255, 255, 0.12)",
-                  borderRadius: "var(--radius-md, 8px)",
-                  padding: "6px",
-                  boxShadow: "0 8px 24px rgba(0, 0, 0, 0.45)",
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: 3,
-                }}
-              >
-                {/* Default roadmap */}
-                <button
-                  type="button"
-                  onClick={() => {
-                    setMapTypeId("roadmap");
-                  }}
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 8,
-                    padding: "6px 8px",
-                    background: mapTypeId === "roadmap" ? "rgba(255, 255, 255, 0.1)" : "transparent",
-                    border: "none",
-                    borderRadius: "var(--radius-sm, 5px)",
-                    color: mapTypeId === "roadmap" ? "#ffffff" : "#cbd5e1",
-                    cursor: "pointer",
-                    fontSize: "0.82rem",
-                    fontWeight: mapTypeId === "roadmap" ? 600 : 400,
-                    textAlign: "left",
-                    width: "100%",
-                    transition: "all 0.15s ease",
-                  }}
-                  onMouseEnter={(e) => {
-                    if (mapTypeId !== "roadmap") e.currentTarget.style.background = "rgba(255, 255, 255, 0.06)";
-                  }}
-                  onMouseLeave={(e) => {
-                    if (mapTypeId !== "roadmap") e.currentTarget.style.background = "transparent";
-                  }}
-                >
-                  <div
-                    style={{
-                      width: 16,
-                      height: 16,
-                      borderRadius: 3,
-                      border: mapTypeId === "roadmap" ? "none" : "1px solid rgba(255, 255, 255, 0.35)",
-                      background: mapTypeId === "roadmap" ? "var(--primary, #3b82f6)" : "transparent",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      flexShrink: 0,
-                    }}
-                  >
-                    {mapTypeId === "roadmap" && <Check size={12} color="#ffffff" strokeWidth={3} />}
-                  </div>
-                  <span>Default</span>
-                </button>
-
-                {/* Terrain */}
-                <button
-                  type="button"
-                  onClick={() => {
-                    setMapTypeId("terrain");
-                  }}
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 8,
-                    padding: "6px 8px",
-                    background: mapTypeId === "terrain" ? "rgba(255, 255, 255, 0.1)" : "transparent",
-                    border: "none",
-                    borderRadius: "var(--radius-sm, 5px)",
-                    color: mapTypeId === "terrain" ? "#ffffff" : "#cbd5e1",
-                    cursor: "pointer",
-                    fontSize: "0.82rem",
-                    fontWeight: mapTypeId === "terrain" ? 600 : 400,
-                    textAlign: "left",
-                    width: "100%",
-                    transition: "all 0.15s ease",
-                  }}
-                  onMouseEnter={(e) => {
-                    if (mapTypeId !== "terrain") e.currentTarget.style.background = "rgba(255, 255, 255, 0.06)";
-                  }}
-                  onMouseLeave={(e) => {
-                    if (mapTypeId !== "terrain") e.currentTarget.style.background = "transparent";
-                  }}
-                >
-                  <div
-                    style={{
-                      width: 16,
-                      height: 16,
-                      borderRadius: 3,
-                      border: mapTypeId === "terrain" ? "none" : "1px solid rgba(255, 255, 255, 0.35)",
-                      background: mapTypeId === "terrain" ? "var(--primary, #3b82f6)" : "transparent",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      flexShrink: 0,
-                    }}
-                  >
-                    {mapTypeId === "terrain" && <Check size={12} color="#ffffff" strokeWidth={3} />}
-                  </div>
-                  <span>Terrain</span>
-                </button>
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Satellite Dropdown */}
-        <div
-          ref={satelliteMenuRef}
-          style={{ position: "relative", width: 105 }}
-          onMouseEnter={() => setShowSatelliteMenu(true)}
-          onMouseLeave={() => setShowSatelliteMenu(false)}
-        >
-          <button
-            type="button"
-            onClick={() => {
-              if (!isSatelliteActive) {
-                setMapTypeId("hybrid");
-              }
-              setShowSatelliteMenu((prev) => !prev);
-              setShowMapMenu(false);
-            }}
-            style={{
-              width: "100%",
-              padding: "6px 10px",
-              background: isSatelliteActive ? "rgba(255, 255, 255, 0.16)" : "transparent",
-              color: isSatelliteActive ? "#ffffff" : "#94a3b8",
-              border: "none",
-              borderRadius: "var(--radius-sm, 6px)",
-              cursor: "pointer",
-              fontWeight: 600,
-              fontSize: "0.82rem",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              transition: "all 0.15s ease",
-            }}
-          >
-            <span>Satellite</span>
-            <ChevronDown
-              size={12}
-              style={{
-                transform: showSatelliteMenu ? "rotate(180deg)" : "rotate(0deg)",
-                transition: "transform 0.2s ease",
-                opacity: 0.8,
-              }}
-            />
-          </button>
-
-          {showSatelliteMenu && (
-            <div
-              onClick={(e) => e.stopPropagation()}
-              style={{
-                position: "absolute",
-                top: "100%",
-                left: 0,
-                paddingTop: 6,
-                zIndex: 30,
-                minWidth: 125,
-              }}
-            >
-              <div
-                style={{
-                  background: "rgba(15, 23, 42, 0.95)",
-                  backdropFilter: "blur(12px)",
-                  WebkitBackdropFilter: "blur(12px)",
-                  border: "1px solid rgba(255, 255, 255, 0.12)",
-                  borderRadius: "var(--radius-md, 8px)",
-                  padding: "6px",
-                  boxShadow: "0 8px 24px rgba(0, 0, 0, 0.45)",
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: 3,
-                }}
-              >
-                {/* Labels toggle */}
-                <button
-                  type="button"
-                  onClick={() => {
-                    setMapTypeId((prev) => (prev === "satellite" ? "hybrid" : "satellite"));
-                  }}
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 8,
-                    padding: "6px 8px",
-                    background: mapTypeId === "hybrid" ? "rgba(255, 255, 255, 0.1)" : "transparent",
-                    border: "none",
-                    borderRadius: "var(--radius-sm, 5px)",
-                    color: mapTypeId === "hybrid" ? "#ffffff" : "#cbd5e1",
-                    cursor: "pointer",
-                    fontSize: "0.82rem",
-                    fontWeight: mapTypeId === "hybrid" ? 600 : 400,
-                    textAlign: "left",
-                    width: "100%",
-                    transition: "all 0.15s ease",
-                  }}
-                  onMouseEnter={(e) => {
-                    if (mapTypeId !== "hybrid") e.currentTarget.style.background = "rgba(255, 255, 255, 0.06)";
-                  }}
-                  onMouseLeave={(e) => {
-                    if (mapTypeId !== "hybrid") e.currentTarget.style.background = "transparent";
-                  }}
-                >
-                  <div
-                    style={{
-                      width: 16,
-                      height: 16,
-                      borderRadius: 3,
-                      border: mapTypeId === "hybrid" ? "none" : "1px solid rgba(255, 255, 255, 0.35)",
-                      background: mapTypeId === "hybrid" ? "var(--primary, #3b82f6)" : "transparent",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      flexShrink: 0,
-                    }}
-                  >
-                    {mapTypeId === "hybrid" && <Check size={12} color="#ffffff" strokeWidth={3} />}
-                  </div>
-                  <span>Labels</span>
-                </button>
-              </div>
-            </div>
-          )}
-        </div>
+      {/* ─── Top-Left: 2D/3D switch ─── */}
+      <div className="map-mode-slot" style={{ position: "absolute", top: 12, left: 12, zIndex: 20 }}>
+      {typeof onMapModeChange === "function" && <MapModeSwitch mode="2d" onChange={onMapModeChange} />}
       </div>
 
-      {/* ─── Top-Right: Plot Legend Overlay (reference-style light panel) ─── */}
-      {showLegend && (
-        <div
-          style={{
-            position: "absolute",
-            top: 16,
-            right: 16,
-            zIndex: 10,
-            background: "rgba(255, 255, 255, 0.95)",
-            backdropFilter: "blur(8px)",
-            WebkitBackdropFilter: "blur(8px)",
-            borderRadius: "var(--radius-md, 8px)",
-            border: "1px solid rgba(15, 23, 42, 0.14)",
-            boxShadow: "0 4px 16px rgba(0, 0, 0, 0.28)",
-            padding: "10px 14px",
-            display: "flex",
-            flexDirection: "column",
-            gap: 5,
-            minWidth: 128,
-          }}
-        >
-          {[
-            { key: "sold", label: "Sold" },
-            { key: "hold", label: "Hold" },
-            { key: "occupied", label: "Occupied" },
-            { key: "available", label: "Available" },
-            { key: "unavailable", label: "Unavailable" },
-          ].map((item) => {
-            const isActive = effectiveFilter === item.key;
-            return (
-              <div
-                key={item.key}
-                onClick={() => {
-                  const next = isActive ? "all" : item.key;
-                  setActiveFilter(next);
-                  if (typeof onStatusFilterChange === "function") onStatusFilterChange(next);
-                }}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 8,
-                  fontSize: "0.8rem",
-                  cursor: "pointer",
-                  padding: "2px 4px",
-                  margin: "0 -4px",
-                  borderRadius: 4,
-                  background: isActive ? "rgba(15, 23, 42, 0.08)" : "transparent",
-                  transition: "background 0.15s ease",
-                }}
-                title={`Click to filter by ${item.label}`}
-              >
-                <div
-                  style={{
-                    width: 11,
-                    height: 11,
-                    borderRadius: 2,
-                    flexShrink: 0,
-                    background: getPlotStatusColor(item.key),
-                    border: "1px solid rgba(0, 0, 0, 0.4)",
-                  }}
-                />
-                <span style={{ color: "#1f2937", fontWeight: isActive ? 700 : 500 }}>
-                  {item.label}
-                </span>
-              </div>
-            );
-          })}
+      {/* ─── Top-Right: base map (Map / Satellite + layers) ─── */}
+      <div className="map-type-slot">
+        <MapTypeControl mapTypeId={mapTypeId} onChange={setMapTypeId} />
+      </div>
 
-          {effectiveFilter !== "all" && (
-            <button
-              type="button"
-              onClick={() => {
-                setActiveFilter("all");
-                if (typeof onStatusFilterChange === "function") onStatusFilterChange("all");
-              }}
-              style={{
-                background: "transparent",
-                border: "none",
-                borderTop: "1px solid rgba(15, 23, 42, 0.12)",
-                color: "#0369a1",
-                fontSize: "0.7rem",
-                fontWeight: 600,
-                cursor: "pointer",
-                padding: "5px 4px 1px",
-                margin: "2px -4px 0",
-                textAlign: "left",
-              }}
-            >
-              Reset filter
-            </button>
-          )}
+      {/* ─── Status key (top left, under the 2D/3D switch; same component as the 3D map) ─── */}
+      {showLegend && (
+        <MapStatusKey
+          filter={effectiveFilter}
+          onFilter={(next) => {
+            setActiveFilter(next);
+            if (typeof onStatusFilterChange === "function") onStatusFilterChange(next);
+          }}
+          belowSwitch={typeof onMapModeChange === "function"}
+          collapsible={isPhone}
+          open={!isPhone || legendOpen}
+          onToggle={() => setLegendOpen((open) => !open)}
+        />
+      )}
+
+      {/* Block types (the directory's legend): one line at the bottom left,
+          above Google's logo; scrolls sideways if too long. */}
+      {showLegend && !isPhone && (
+        <div
+          className="map-types-strip"
+          style={{ left: 12, bottom: 30, maxWidth: "calc(100% - 90px)" }}
+        >
+          <BlockTypeLegend inline wrap={false} />
         </div>
       )}
 
@@ -1186,6 +856,52 @@ function GoogleMapLoadedView({
         onUnmount={onUnmount}
         onClick={handleMapClick}
       >
+        {/* The rest of the park, under the rows: blocks not mapped yet (grey
+            roofs, not tappable) and the buildings, with their names. */}
+        {site.blocks.map((b) => (
+          <PolygonF
+            key={`site-block-${b.name}`}
+            paths={b.path}
+            options={{
+              strokeColor: "#ffffff",
+              strokeOpacity: 0.9,
+              strokeWeight: 1.5,
+              fillColor: "#94a3b8",
+              fillOpacity: 0.55,
+              clickable: false,
+              zIndex: 60,
+            }}
+          />
+        ))}
+        {site.buildings.map((b, i) => (
+          <PolygonF
+            key={`site-building-${i}`}
+            paths={b.path}
+            options={{
+              strokeColor: "#facc15",
+              strokeOpacity: 0.9,
+              strokeWeight: 1.5,
+              fillColor: "#facc15",
+              fillOpacity: 0.08,
+              clickable: false,
+              zIndex: 55,
+            }}
+          />
+        ))}
+        {mapsReady &&
+          zoomLevel >= 16.5 &&
+          [...site.blocks.map((b) => ({ ...b, kind: "block" })), ...site.buildings.map((b) => ({ ...b, kind: "building" }))].map(
+            (b, i) => (
+              <MarkerF
+                key={`site-label-${i}`}
+                position={b.center}
+                clickable={false}
+                icon={getSiteLabelIcon(b.name, b.angleDeg, b.kind)}
+                zIndex={b.kind === "block" ? 320 : 310}
+              />
+            )
+          )}
+
         {/* Navigation Polyline */}
         {routeSegments.road.length > 1 && (
           <PolylineF
@@ -1193,19 +909,31 @@ function GoogleMapLoadedView({
             options={{ strokeColor: "#00E5FF", strokeWeight: 5, strokeOpacity: 0.9, zIndex: 300 }}
           />
         )}
-        {/* Route start: where the visitor (or the kiosk) begins walking */}
-        {routePath.length > 1 && window.google?.maps && (
+        {/* "You're here": a walking person at the visitor's live position, else at the route start */}
+        {(userPosition || routePath.length > 1) && mapsReady && (
           <MarkerF
-            position={routePath[0]}
-            title="Start"
-            zIndex={320}
+            position={userPosition ? { lat: userPosition.lat, lng: userPosition.lng } : routePath[0]}
+            title="You're here"
+            zIndex={540}
             icon={{
-              path: window.google.maps.SymbolPath.CIRCLE,
-              scale: 8,
-              fillColor: "#00E5FF",
-              fillOpacity: 1,
-              strokeColor: "#ffffff",
-              strokeWeight: 3,
+              url: WALKER_PIN_ICON,
+              anchor: new window.google.maps.Point(20, 48),
+              scaledSize: new window.google.maps.Size(40, 50),
+            }}
+          />
+        )}
+        {userPosition && Number.isFinite(userPosition.accuracy) && (
+          <CircleF
+            center={{ lat: userPosition.lat, lng: userPosition.lng }}
+            radius={userPosition.accuracy}
+            options={{
+              strokeColor: "#2563eb",
+              strokeOpacity: 0.5,
+              strokeWeight: 1,
+              fillColor: "#2563eb",
+              fillOpacity: 0.12,
+              clickable: false,
+              zIndex: 310,
             }}
           />
         )}
@@ -1347,12 +1075,19 @@ function GoogleMapLoadedView({
               {/* Subdivided Plot Cells with Crisp White Dividers & Status Colors */}
               {block.cells.map((cell) => {
                 const isDimmed = dimmed.has(cell.plot?.id);
-                const color = isDimmed ? "#64748b" : getPlotStatusColor(cell.status);
+                // "partial" when a multi-tier column still has vacant tiers.
+                const cellStatus = mapPlotStatus(cell.plot ?? { status: cell.status });
+                const color = isDimmed ? "#64748b" : getPlotStatusColor(cellStatus);
                 const isSelected = selectedPlot?.id === cell.plot?.id;
                 const isHovered = hoveredPlot?.id === cell.plot?.id;
-                const matchesFilter =
-                  effectiveFilter === "all" ||
-                  cell.status?.toLowerCase() === effectiveFilter.toLowerCase();
+                const matchesFilter = matchesStatusFilter(cellStatus, effectiveFilter);
+                // A multi-tier column is drawn as one strip per tier: red occupied, green vacant.
+                const occ =
+                  cell.plot && Array.isArray(cell.plot.graves) && cell.status !== "reserved" && cell.status !== "maintenance"
+                    ? tierOccupancy(cell.plot)
+                    : null;
+                const tierStrips =
+                  occ && occ.total > 1 && !isDimmed && !isSelected ? splitCellAcross(cell.corners, occ.total) : null;
                 const cellOpacity = isSelected
                   ? 0.95
                   : isDimmed
@@ -1365,11 +1100,27 @@ function GoogleMapLoadedView({
 
                 return (
                   <Fragment key={`b-cell-${block.rowKey}-${cell.index}`}>
+                    {tierStrips?.map((path, k) => (
+                      <PolygonF
+                        key={`tier-${k}`}
+                        paths={path}
+                        options={{
+                          fillColor: getPlotStatusColor(occ.tiers[k] ? "occupied" : "available"),
+                          fillOpacity: cellOpacity,
+                          strokeColor: "#ffffff",
+                          strokeWeight: 0.6,
+                          strokeOpacity: 0.8,
+                          clickable: false,
+                          zIndex: 349,
+                        }}
+                      />
+                    ))}
+                    {/* The cell outline takes the clicks; its fill is left to the tier strips when there are some. */}
                     <PolygonF
                       paths={cell.corners}
                       options={{
                         fillColor: color,
-                        fillOpacity: cellOpacity,
+                        fillOpacity: tierStrips ? 0 : cellOpacity,
                         strokeColor: isSelected
                           ? "#00E5FF"
                           : cell.plot?._modified
@@ -1904,8 +1655,6 @@ export default function CemeteryMap(props) {
           style={{
             width: 54,
             height: 54,
-            borderRadius: "50%",
-            background: "rgba(239, 68, 68, 0.12)",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
@@ -1929,6 +1678,11 @@ export default function CemeteryMap(props) {
         >
           The interactive cemetery map requires a valid Google Maps API key.
         </p>
+        {typeof props.onMapModeChange === "function" && (
+          <button type="button" className="btn btn-primary" onClick={() => props.onMapModeChange("3d")}>
+            Use the 3D map instead
+          </button>
+        )}
       </div>
     );
   }

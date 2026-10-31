@@ -13,16 +13,32 @@ export function getPlotStatusColor(status) {
   switch (status?.toLowerCase()) {
     case "occupied":
       return "#E15B52"; // Salmon Red (Occupied)
+    case "partial":
+      // A partly filled column is occupied; its vacant tiers are drawn as green strips (splitCellAcross).
+      return "#E15B52";
     case "available":
       return "#7CC47F"; // Soft Green (Available)
     case "reserved":
-    case "hold":
-      return "#C9CDDC"; // Light Gray-Lavender (Hold)
-    case "sold":
-      return "#CDB553"; // Khaki Yellow (Sold)
+      return "#C9CDDC"; // Light Gray-Lavender (Reserved)
+    case "maintenance":
     default:
-      return "#6674D7"; // Periwinkle Blue (Unavailable)
+      return "#6674D7"; // Periwinkle Blue (Maintenance)
   }
+}
+
+/**
+ * Splits a plot cell [c0, c1, c2, c3] (c0 -> c1 runs along the row) into `n`
+ * strips across its width, one per tier: strip 0 (tier 1) lies along the
+ * c3 -> c2 edge. Lets the map colour each tier of a crypt column.
+ */
+export function splitCellAcross(corners, n) {
+  const [c0, c1, c2, c3] = corners;
+  const lerp = (a, b, t) => ({ lat: a.lat + (b.lat - a.lat) * t, lng: a.lng + (b.lng - a.lng) * t });
+  return Array.from({ length: n }, (_, k) => {
+    const t0 = k / n;
+    const t1 = (k + 1) / n;
+    return [lerp(c3, c0, t0), lerp(c2, c1, t0), lerp(c2, c1, t1), lerp(c3, c0, t1)];
+  });
 }
 
 // Compute rotated rectangular footprint for a plot cell
@@ -110,7 +126,10 @@ export function getBoundaryCoords(centerLat, centerLng, angle, offsets) {
  * `paddingMeters`. Returns offsets ready for `getBoundaryCoords` (null when
  * there is nothing to enclose).
  */
-export function deriveBoundaryOffsets(plots, angle = DEFAULT_GRID_ANGLE_DEG, paddingMeters = 8) {
+// `extraPoints` ({ lat, lng }) widen the rectangle too, e.g. the corners of
+// directory blocks that have no plots yet, so the default boundary covers
+// the whole park.
+export function deriveBoundaryOffsets(plots, angle = DEFAULT_GRID_ANGLE_DEG, paddingMeters = 8, extraPoints = []) {
   const center = getBuildingsCenter(plots);
   if (!center) return null;
   const frame = angle ?? DEFAULT_GRID_ANGLE_DEG;
@@ -122,6 +141,14 @@ export function deriveBoundaryOffsets(plots, angle = DEFAULT_GRID_ANGLE_DEG, pad
   for (const p of plots) {
     if (!isActiveBuildingPlot(p) || !hasGps(p)) continue;
     const { dx, dy } = latLngToLocalOffset(Number(p.gpsLat), Number(p.gpsLng), center.lat, center.lng, frame);
+    minDx = Math.min(minDx, dx);
+    maxDx = Math.max(maxDx, dx);
+    minDy = Math.min(minDy, dy);
+    maxDy = Math.max(maxDy, dy);
+  }
+  for (const p of extraPoints || []) {
+    if (!Number.isFinite(p?.lat) || !Number.isFinite(p?.lng)) continue;
+    const { dx, dy } = latLngToLocalOffset(p.lat, p.lng, center.lat, center.lng, frame);
     minDx = Math.min(minDx, dx);
     maxDx = Math.max(maxDx, dx);
     minDy = Math.min(minDy, dy);

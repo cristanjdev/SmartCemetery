@@ -6,6 +6,12 @@ const nextConfig = {
   // so bundling it breaks PDF generation. exceljs is externalized for the same
   // robustness reason.
   serverExternalPackages: ["pdfkit", "exceljs"],
+
+  // The public map navigator used to live at /kiosk (there is no kiosk screen);
+  // old links and QR codes keep working, with their ?grave=… query.
+  async redirects() {
+    return [{ source: "/kiosk", destination: "/map", permanent: true }];
+  },
 };
 
 export default nextConfig;

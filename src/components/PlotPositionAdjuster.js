@@ -49,6 +49,7 @@ import {
   isBuildingPlot,
   listBuildingKeys,
   plotsOfBuilding,
+  blockFullLabel,
 } from "@/lib/cemetery-layout";
 import {
   snapBuildingToPlots,
@@ -422,8 +423,9 @@ export default function PlotPositionAdjuster({
         lengthMeters: snapped.lengthMeters,
         widthMeters: snapped.widthMeters,
         angleDeg: snapped.angleDeg,
-        numCols: rowPlots.length,
-        numRows: 1,
+        // Two rows (front and back faces) for a back-to-back block.
+        numCols: snapped.numCols,
+        numRows: snapped.numRows,
         invertCols: false,
         targetPlots: rowPlots,
         targetRow: r,
@@ -1098,7 +1100,7 @@ export default function PlotPositionAdjuster({
             <optgroup label="Individual Rows">
               {availableRows.map((r) => (
                 <option key={r} value={r}>
-                  {buildingLabel(r)}
+                  {blockFullLabel(r)}
                 </option>
               ))}
             </optgroup>
@@ -1834,7 +1836,7 @@ export default function PlotPositionAdjuster({
                   const count = plotsOfBuilding(plots, r).length;
                   return (
                     <option key={r} value={r}>
-                      {buildingLabel(r)} ({count} plots)
+                      {blockFullLabel(r)} ({count} plots)
                     </option>
                   );
                 })}
@@ -2488,10 +2490,8 @@ export default function PlotPositionAdjuster({
             <div style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
               <div
                 style={{
-                  width: 36,
+                  width: "auto",
                   height: 36,
-                  borderRadius: "50%",
-                  background: "rgba(16, 185, 129, 0.15)",
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
@@ -2624,10 +2624,8 @@ export default function PlotPositionAdjuster({
             <div style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
               <div
                 style={{
-                  width: 36,
+                  width: "auto",
                   height: 36,
-                  borderRadius: "50%",
-                  background: "rgba(239, 68, 68, 0.15)",
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",

@@ -9,7 +9,8 @@
  * existing preset's `location.matchName`). Only the plot positions are
  * regenerated; the preset's identity (name, description, location), tier count,
  * retired rows and per-row building configs are preserved from the existing
- * file. Rows that are new will have no building config until one is added.
+ * file, as is the record of renamed rows (`renamedRows`). Rows that are new will
+ * have no building config until one is added.
  */
 const { PrismaClient } = require("@prisma/client");
 const fs = require("fs");
@@ -102,6 +103,8 @@ async function main() {
     },
     tiersPerPlot: existing.tiersPerPlot || (tierCounts.length ? Math.max(...tierCounts) : 4),
     deletedRows: existing.deletedRows || [],
+    // Old row name → new one, so an older database is renamed when the preset is applied.
+    ...(existing.renamedRows ? { renamedRows: existing.renamedRows } : {}),
     rowConfigs: Object.fromEntries(
       Object.entries(existing.rowConfigs || {}).filter(([key]) => presetRows[key])
     ),

@@ -1,6 +1,8 @@
 import { prisma } from "@/lib/db";
 import { getBuildingKey } from "@/lib/cemetery-layout";
 import { buildWalkwayNetwork } from "@/lib/walkways";
+import { routeObstacles } from "@/lib/site-surroundings";
+import { siteBoundaryPath } from "@/lib/site-overlay";
 
 // Rows change only when the layout is edited, so the network is rebuilt at
 // most once a minute rather than on every route request.
@@ -24,7 +26,13 @@ export async function loadWalkwayNetwork(now = Date.now()) {
       key: getBuildingKey(plot),
       lat: Number(plot.gpsLat),
       lng: Number(plot.gpsLng),
-    }))
+    })),
+    // Buildings and not-yet-mapped blocks are walked round as well, and the
+    // walk stays inside the cemetery's outline (the one the 2D map draws: the
+    // paved yard plus a little margin, so the aisle round a block's end that
+    // touches the yard's edge stays open).
+    routeObstacles(),
+    siteBoundaryPath()
   );
   cache = { at: now, network };
   return network;

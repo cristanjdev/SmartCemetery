@@ -1294,9 +1294,6 @@ html.landing-no-scrollbar body::-webkit-scrollbar {
 .search-empty-icon-wrap {
   width: 72px;
   height: 72px;
-  border-radius: 20px;
-  background: rgba(59, 130, 246, 0.1);
-  border: 1px solid rgba(59, 130, 246, 0.2);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -2066,13 +2063,350 @@ html.landing-no-scrollbar body::-webkit-scrollbar {
 }
 
 .kiosk-navigation-panel {
-  margin-top: 0.5rem;
-  padding-top: 1rem;
+  margin-top: 1rem;
+}
+
+/* The card's one main action, solid like the plot card's. */
+.kiosk-navigation-panel button.btn {
+  min-height: 44px;
+  background: var(--primary, #2563eb) !important;
+  border-color: transparent !important;
+  color: #fff !important;
+  font-weight: 600;
+}
+
+.kiosk-navigation-panel button.btn:hover:not(:disabled) {
+  background: var(--primary-dark, #1d4ed8) !important;
+}
+
+/* ── Plot card: a plot tapped on the public map ───────────────────────────
+   Heading, three facts (row, side, column), the niche stack and directions,
+   each in its own ruled section. */
+.plot-card-head {
+  padding: 1rem 1.25rem 0.8rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+/* Clear the selection: a quiet pill beside the title. */
+.plot-card-clear {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  height: 34px;
+  padding: 0 0.8rem;
+  border-radius: 999px;
+  border: 1px solid var(--public-border-soft);
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.plot-card-clear:hover {
+  background: rgba(148, 163, 184, 0.12);
+  color: var(--text-primary);
+}
+
+.plot-card-clear:focus-visible,
+.kiosk-card-clear:focus-visible {
+  outline: 2px solid var(--primary-light, #60a5fa);
+  outline-offset: 2px;
+}
+
+/* The grave card's clear button sits on its photo. */
+.kiosk-card-clear {
+  position: absolute;
+  top: 0.75rem;
+  right: 0.75rem;
+  z-index: 3;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  background: rgba(15, 23, 42, 0.6);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  color: #ffffff;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.kiosk-card-clear:hover {
+  background: rgba(15, 23, 42, 0.8);
+}
+
+.plot-card-title {
+  min-width: 0;
+  margin: 0;
+  font-size: 1.35rem;
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+  color: var(--text-primary);
+  overflow-wrap: anywhere;
+}
+
+.plot-card-facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(5.2rem, 1fr));
+  gap: 0.45rem;
+  margin: 0;
+  padding: 0 1.25rem 0.9rem;
+}
+
+.plot-card-fact {
+  min-width: 0;
+  padding: 0.4rem 0.65rem;
+  border-radius: 10px;
+  background: rgba(148, 163, 184, 0.08);
+  border: 1px solid var(--public-border-soft);
+}
+
+.plot-card-fact dt {
+  margin: 0 0 0.05rem;
+  font-size: 0.66rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.plot-card-fact dd {
+  margin: 0;
+  font-size: 0.92rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  overflow-wrap: anywhere;
+}
+
+.plot-card-section {
+  padding: 0.8rem 1.25rem 0.9rem;
   border-top: 1px solid var(--public-border-soft);
 }
 
-.kiosk-navigation-panel button.btn {
+.plot-card-section-title {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin: 0 0 0.55rem;
+  font-size: 0.76rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.plot-card-section-title .plot-card-count {
+  font-size: 0.84rem;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--text-secondary);
+}
+
+/* One segment per tier: green vacant, red occupied (same colours as the map). */
+.plot-card-meter {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+  gap: 4px;
+  height: 7px;
+  margin-bottom: 0.6rem;
+}
+
+.plot-card-meter-seg {
+  border-radius: 4px;
+  background: #7cc47f;
+}
+
+.plot-card-meter-seg.is-occupied {
+  background: #e15b52;
+}
+
+.plot-card-tiers {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--public-border-soft);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.plot-card-tier + .plot-card-tier {
+  border-top: 1px solid var(--public-border-soft);
+}
+
+.plot-card-tier-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  width: 100%;
   min-height: 44px;
+  padding: 0.3rem 0.85rem 0.3rem 0.75rem;
+  background: transparent;
+  border: 0;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+}
+
+button.plot-card-tier-row {
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+button.plot-card-tier-row:hover,
+button.plot-card-tier-row:focus-visible {
+  background: var(--bg-hover);
+  outline: none;
+}
+
+button.plot-card-tier-row:focus-visible {
+  box-shadow: inset 0 0 0 2px var(--primary);
+}
+
+.plot-card-tier-swatch {
+  flex-shrink: 0;
+  align-self: stretch;
+  width: 4px;
+  border-radius: 2px;
+  background: #7cc47f;
+}
+
+.is-occupied > .plot-card-tier-row .plot-card-tier-swatch {
+  background: #e15b52;
+}
+
+.plot-card-tier-name {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+}
+
+.plot-card-tier-label {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.plot-card-tier-level {
+  font-size: 0.72rem;
+  line-height: 1.2;
+  color: var(--text-muted);
+}
+
+.plot-card-tier-state {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  max-width: 55%;
+  font-size: 0.86rem;
+  font-weight: 600;
+  text-align: right;
+  color: var(--text-primary);
+  overflow-wrap: anywhere;
+}
+
+.is-vacant > .plot-card-tier-row .plot-card-tier-state {
+  color: #5fbf8a;
+}
+
+[data-theme="light"] .is-vacant > .plot-card-tier-row .plot-card-tier-state {
+  color: #1f7a45;
+}
+
+.plot-card-tier-state svg {
+  flex-shrink: 0;
+  color: var(--text-muted);
+}
+
+/* The card uses the column's full height: the niche rows share any spare
+   height evenly (up to a comfortable maximum) and Directions sits at the bottom. */
+.plot-card-section-niches {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.plot-card-section-niches .plot-card-tiers {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.plot-card-section-niches .plot-card-tier {
+  flex: 1 1 44px;
+  display: flex;
+  max-height: 84px;
+}
+
+.plot-card-section-niches .plot-card-tier > .plot-card-tier-row {
+  flex: 1;
+}
+
+.plot-card-section-directions {
+  flex: 0 1 auto;
+  /* Just the button: no divider or heading above it. */
+  border-top: none;
+  padding-top: 0.25rem;
+}
+
+/* Directions: the card's one main action, as a solid button. */
+.plot-card-section .btn-primary {
+  min-height: 44px;
+  background: var(--primary, #2563eb) !important;
+  border-color: transparent !important;
+  color: #fff !important;
+  font-weight: 600;
+}
+
+.plot-card-section .btn-primary:hover:not(:disabled) {
+  background: var(--primary-dark, #1d4ed8) !important;
+}
+
+.plot-card-section .btn-primary:disabled {
+  opacity: 0.7;
+}
+
+.plot-card-section-directions {
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.plot-card-section-directions > div {
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Grave card: why a record has no walking directions. */
+.kiosk-card-note {
+  margin: 1rem 0 0;
+  padding: 0.7rem 0.85rem;
+  border-radius: 10px;
+  border: 1px solid var(--public-border-soft);
+  background: rgba(148, 163, 184, 0.08);
+  font-size: 0.82rem;
+  line-height: 1.45;
+  color: var(--text-secondary);
+}
+
+.plot-card-note {
+  margin: 0.6rem 0 0;
+  font-size: 0.78rem;
+  color: var(--text-muted);
 }
 
 /* Other Matching Results */
@@ -2249,8 +2583,6 @@ html.landing-no-scrollbar body::-webkit-scrollbar {
 .kiosk-empty-icon {
   width: 60px;
   height: 60px;
-  border-radius: 18px;
-  background: rgba(59, 130, 246, 0.1);
   color: var(--primary-light, #60a5fa);
   display: flex;
   align-items: center;
@@ -2317,6 +2649,77 @@ html.landing-no-scrollbar body::-webkit-scrollbar {
   min-width: 0;
 }
 
+/* While a route is shown: where the visitor is (not here yet, walking,
+   arrived). Sentence case so a longer message stays easy to read. */
+.kiosk-map-walk {
+  --walk-tone: #94a3b8;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  min-width: 0;
+  max-width: 100%;
+  /* No container: the dot and text sit straight on the card. */
+  padding: 0.3rem 0;
+  font-size: 0.78rem;
+  font-weight: 600;
+  line-height: 1.2;
+  color: var(--text-primary);
+}
+
+.kiosk-map-walk.is-live,
+.kiosk-map-walk.is-done {
+  --walk-tone: #22c55e;
+}
+
+.kiosk-map-walk.is-wait {
+  --walk-tone: #f59e0b;
+}
+
+.kiosk-map-walk.is-done {
+  color: #16a34a;
+}
+
+[data-theme="dark"] .kiosk-map-walk.is-done {
+  color: #4ade80;
+}
+
+.kiosk-map-walk-dot {
+  width: 8px;
+  height: 8px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: var(--walk-tone);
+}
+
+.kiosk-map-walk.is-live .kiosk-map-walk-dot,
+.kiosk-map-walk.is-wait .kiosk-map-walk-dot {
+  animation: kiosk-walk-pulse 1.8s ease-out infinite;
+}
+
+.kiosk-map-walk-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@keyframes kiosk-walk-pulse {
+  0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--walk-tone) 60%, transparent); }
+  100% { box-shadow: 0 0 0 8px transparent; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .kiosk-map-walk-dot {
+    animation: none !important;
+  }
+}
+
+/* The header end can shrink so a long status shortens instead of overflowing. */
+.kiosk-map-header-end,
+.kiosk-map-status {
+  min-width: 0;
+}
+
 .kiosk-map-eyebrow {
   display: inline-flex;
   align-items: center;
@@ -2372,27 +2775,6 @@ html.landing-no-scrollbar body::-webkit-scrollbar {
 @keyframes kioskLivePulse {
   0% { transform: scale(0.6); opacity: 0.9; }
   100% { transform: scale(1.9); opacity: 0; }
-}
-
-.kiosk-map-recenter-btn {
-  min-height: 40px;
-  padding: 0 0.9rem;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border: none;
-  border-radius: 9999px;
-  background: var(--bg-hover);
-  color: var(--text-secondary);
-  font-size: 0.8rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background 0.2s ease, color 0.2s ease;
-}
-
-.kiosk-map-recenter-btn:hover {
-  background: rgba(148, 163, 184, 0.18);
-  color: var(--text-primary);
 }
 
 /* The map sits inset in the card with its own rounded corners (card radius
@@ -2505,7 +2887,8 @@ html.landing-no-scrollbar body::-webkit-scrollbar {
   flex-shrink: 0;
   border: none;
   border-radius: 9999px;
-  background: var(--bg-hover);
+  /* No container: plain text and arrow, tinted only on hover. */
+  background: transparent;
   color: var(--text-primary);
   font-size: 0.85rem;
   font-weight: 600;
@@ -2525,8 +2908,7 @@ html.landing-no-scrollbar body::-webkit-scrollbar {
   transform: translateX(-2px);
 }
 
-.kiosk-map-back-btn:focus-visible,
-.kiosk-map-recenter-btn:focus-visible {
+.kiosk-map-back-btn:focus-visible {
   outline: 2px solid var(--primary);
   outline-offset: 2px;
 }
@@ -2735,5 +3117,127 @@ html.landing-no-scrollbar body::-webkit-scrollbar {
 
   .kiosk-focus .kiosk-card-media {
     display: none;
+  }
+}
+
+/* ── Map Navigator on desktop monitors and TV screens ───────────────────
+   Landscape screens with room for it: the page fits the screen exactly (no
+   page scrollbar). The title and search share one row, and the details
+   panel and map fill the height that is left. Phones, tablets and short
+   laptop screens (under 700px tall, where the plot card would have to
+   scroll inside) keep the scrolling page above. */
+@media (min-width: 1100px) and (min-height: 700px) and (orientation: landscape) {
+  .kiosk-public-wrapper {
+    height: 100vh;
+    height: 100dvh;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .kiosk-page-container {
+    min-height: 0;
+    padding: 96px 1.5rem 1.25rem;
+  }
+
+  .kiosk-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 2rem;
+    text-align: left;
+    padding: 0;
+    margin: 0 0 1rem;
+  }
+
+  .kiosk-header-text {
+    min-width: 0;
+  }
+
+  .kiosk-title {
+    font-size: clamp(1.45rem, 1.5vw, 2.1rem);
+    margin: 0 0 0.2rem;
+  }
+
+  .kiosk-subtitle {
+    font-size: 0.92rem;
+    max-width: 560px;
+    margin: 0;
+  }
+
+  .kiosk-header .search-bar-spaced {
+    flex: 0 1 600px;
+    margin: 0;
+  }
+
+  .kiosk-public-wrapper .alert {
+    margin-bottom: 1rem !important;
+  }
+
+  .kiosk-workspace {
+    min-height: 0;
+    align-items: stretch;
+    grid-template-rows: minmax(0, 1fr);
+  }
+
+  .kiosk-map-stage,
+  .kiosk-map-card {
+    min-height: 0;
+    height: 100%;
+  }
+
+  .kiosk-map-viewport {
+    flex: 1;
+    height: auto;
+    min-height: 0;
+  }
+}
+
+/* Large monitors and TVs: use the width instead of a centred 1440px column,
+   and give the details panel more room. */
+@media (min-width: 1800px) {
+  .kiosk-page-container {
+    max-width: 94vw;
+  }
+
+  .kiosk-workspace {
+    grid-template-columns: 460px 1fr;
+  }
+}
+
+/* 2K / 4K screens at 100% scaling: the interface (nav, title and search,
+   details panel, map header and the buttons on the map) is zoomed so it can
+   be read from a few steps away. The map canvas itself is not zoomed, so
+   taps and clicks on plots stay exact. */
+@media (min-width: 2400px) {
+  .kiosk-public-wrapper {
+    --tv-zoom: 1.25;
+  }
+}
+
+@media (min-width: 3200px) {
+  .kiosk-public-wrapper {
+    --tv-zoom: 1.75;
+  }
+}
+
+@media (min-width: 2400px) {
+  .kiosk-public-wrapper .premium-nav,
+  .kiosk-public-wrapper .kiosk-header,
+  .kiosk-public-wrapper .alert,
+  .kiosk-public-wrapper .kiosk-sidebar,
+  .kiosk-public-wrapper .kiosk-map-header-bar,
+  .kiosk-public-wrapper .map-mode-slot,
+  .kiosk-public-wrapper .map-type-slot,
+  .kiosk-public-wrapper [data-testid="cemetery-map-3d"] > :not(:has(canvas)) {
+    zoom: var(--tv-zoom);
+  }
+
+  .kiosk-public-wrapper .kiosk-page-container {
+    padding: calc(80px * var(--tv-zoom) + 16px) 2rem 1.5rem;
+  }
+
+  .kiosk-workspace {
+    grid-template-columns: calc(460px * var(--tv-zoom)) 1fr;
+    gap: calc(1.5rem * var(--tv-zoom));
   }
 }

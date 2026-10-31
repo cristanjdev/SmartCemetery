@@ -352,8 +352,7 @@ export default function DashboardHeader() {
           {/* User Profile */}
           <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
             <div style={{
-              width: "32px", height: "32px", borderRadius: "50%",
-              background: "var(--bg-hover)", display: "flex",
+              width: "auto", height: "32px", display: "flex",
               alignItems: "center", justifyContent: "center", color: "var(--text-secondary)",
             }}>
               <User size={16} />
